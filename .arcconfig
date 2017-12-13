@@ -1,0 +1,17 @@
+{
+  "repository.callsign": "MOAOSPC",
+  "conduit_uri": "https://code.uberinternal.com/",
+  "history.immutable": false,
+  "load" : ["arc"],
+  "unit.engine": "UberMultiTestEngine",
+  "unit.engine.multi.engines": [
+    {
+      "engine": "CustomUnitTestEngine",
+      "unit.engine.command": "./arc/upgrade_arc.sh",
+      "unit.engine.timeout" : "10"
+    }
+  ],
+  "uber.land.prevent-unaccepted-changes": true,
+  "uber.land.buildables-check": false,
+  "uber.differential.max_changes": 3000
+}

@@ -1,2 +1,10 @@
 JIT_ART
 **/__pycache__/**
+
+
+.idea/
+*.iml
+build/
+.gradle/
+out/
+.DS_Store
