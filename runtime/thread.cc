@@ -27,6 +27,7 @@
 #include <iostream>
 #include <list>
 #include <sstream>
+#include <fstream>
 
 #include "arch/context.h"
 #include "art_field-inl.h"
@@ -83,6 +84,50 @@
 #endif  // ART_USE_FUTEXES
 
 namespace art {
+
+namespace tracing {
+  Thread* enabled = nullptr;
+  int64_t data[40000000];  // Enough room for 20M methods
+  int64_t* data_ptr = &data[0];
+  std::atomic<int64_t> now;
+  std::thread* now_syncer = nullptr;
+
+  void Start(Thread* self)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+    if (::art::tracing::now_syncer == nullptr) {
+      ::art::tracing::now_syncer = new std::thread([]() {
+        // Constantly sync the current timestamp.
+        while (true) {
+          ::art::tracing::now = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+        }
+      });
+    }
+    ::art::tracing::now = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+    ::art::tracing::enabled = self;
+  }
+
+  void Stop(Thread* self ATTRIBUTE_UNUSED, std::string out_path)
+    SHARED_REQUIRES(Locks::mutator_lock_) {
+    ::art::tracing::enabled = nullptr;
+
+    // Write trace log to given path.
+    std::ofstream out(out_path, std::ofstream::trunc);
+    if (out.is_open()) {
+      int64_t* ptr = &data[0];
+      while (ptr < data_ptr) {
+        ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
+        int64_t timestamp = *ptr++;
+        std::string message = method == nullptr ? "POP" : PrettyMethod(method);
+        out << message << ":" << timestamp << "\n";
+      }
+    } else {
+      LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
+    }
+
+    // Reset log pointer.
+    ::art::tracing::data_ptr = &data[0];
+  }
+}  // namespace tracing
 
 bool Thread::is_started_ = false;
 pthread_key_t Thread::pthread_key_self_;
@@ -878,7 +923,19 @@ void Thread::InitPeer(ScopedObjectAccess& soa, jboolean thread_is_daemon, jobjec
       SetInt<kTransactionActive>(tlsPtr_.opeer, thread_priority);
 }
 
+// From Java, call Thread.setName("START_TRACING") to start tracing this thread. To stop,
+// call Thread.setName("STOP_TRACING:/sdcard/out.txt") to stop tracing and write the log
+// to "/sdcard/out.txt".
 void Thread::SetThreadName(const char* name) {
+  std::string name_str(name);
+  if (name_str.compare("START_TRACING") == 0) {
+    ::art::tracing::Start(this);
+    return;
+  } else if (name_str.find("STOP_TRACING:") == 0) {
+    std::string out_path = name_str.substr(std::strlen("STOP_TRACING:"));
+    ::art::tracing::Stop(this, out_path);
+    return;
+  }
   tlsPtr_.name->assign(name);
   ::art::SetThreadName(name);
   Dbg::DdmSendThreadNotification(this, CHUNK_TYPE("THNM"));

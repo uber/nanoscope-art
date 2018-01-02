@@ -290,7 +290,7 @@ ADD_TEST_EQ(MIRROR_STRING_COUNT_OFFSET, art::mirror::String::CountOffset().Int32
 ADD_TEST_EQ(MIRROR_STRING_VALUE_OFFSET, art::mirror::String::ValueOffset().Int32Value())
 
 // Offsets within java.lang.reflect.ArtMethod.
-#define ART_METHOD_DEX_CACHE_METHODS_OFFSET_32 20
+#define ART_METHOD_DEX_CACHE_METHODS_OFFSET_32 24
 ADD_TEST_EQ(ART_METHOD_DEX_CACHE_METHODS_OFFSET_32,
             art::ArtMethod::DexCacheResolvedMethodsOffset(4).Int32Value())
 
@@ -298,7 +298,7 @@ ADD_TEST_EQ(ART_METHOD_DEX_CACHE_METHODS_OFFSET_32,
 ADD_TEST_EQ(ART_METHOD_DEX_CACHE_METHODS_OFFSET_64,
             art::ArtMethod::DexCacheResolvedMethodsOffset(8).Int32Value())
 
-#define ART_METHOD_DEX_CACHE_TYPES_OFFSET_32 24
+#define ART_METHOD_DEX_CACHE_TYPES_OFFSET_32 28
 ADD_TEST_EQ(ART_METHOD_DEX_CACHE_TYPES_OFFSET_32,
             art::ArtMethod::DexCacheResolvedTypesOffset(4).Int32Value())
 
@@ -306,7 +306,7 @@ ADD_TEST_EQ(ART_METHOD_DEX_CACHE_TYPES_OFFSET_32,
 ADD_TEST_EQ(ART_METHOD_DEX_CACHE_TYPES_OFFSET_64,
             art::ArtMethod::DexCacheResolvedTypesOffset(8).Int32Value())
 
-#define ART_METHOD_JNI_OFFSET_32 28
+#define ART_METHOD_JNI_OFFSET_32 32
 ADD_TEST_EQ(ART_METHOD_JNI_OFFSET_32,
             art::ArtMethod::EntryPointFromJniOffset(4).Int32Value())
 
@@ -314,7 +314,7 @@ ADD_TEST_EQ(ART_METHOD_JNI_OFFSET_32,
 ADD_TEST_EQ(ART_METHOD_JNI_OFFSET_64,
             art::ArtMethod::EntryPointFromJniOffset(8).Int32Value())
 
-#define ART_METHOD_QUICK_CODE_OFFSET_32 32
+#define ART_METHOD_QUICK_CODE_OFFSET_32 36
 ADD_TEST_EQ(ART_METHOD_QUICK_CODE_OFFSET_32,
             art::ArtMethod::EntryPointFromQuickCompiledCodeOffset(4).Int32Value())
 

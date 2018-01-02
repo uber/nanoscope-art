@@ -89,6 +89,7 @@
 #include "scoped_thread_state_change.h"
 #include "thread-inl.h"
 #include "trace.h"
+#include "trace_blacklist.h"
 #include "utils.h"
 #include "utils/dex_cache_arrays_layout-inl.h"
 #include "verifier/method_verifier.h"
@@ -3155,6 +3156,10 @@ void ClassLinker::LoadMethod(Thread* self,
 
   dst->SetDexCacheResolvedMethods(klass->GetDexCache()->GetResolvedMethods(), image_pointer_size_);
   dst->SetDexCacheResolvedTypes(klass->GetDexCache()->GetResolvedTypes(), image_pointer_size_);
+
+  // When we load the ArtMethod, check to see it's blacklisted. If it is, then don't enable tracing.
+  bool tracing_enabled = ::art::tracing::blacklist.find(PrettyMethod(dst)) == ::art::tracing::blacklist.end();
+  dst->SetTracingEnabled(tracing_enabled);
 
   uint32_t access_flags = it.GetMethodAccessFlags();
 

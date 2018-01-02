@@ -54,6 +54,10 @@ ArtMethod* ArtMethod::FromReflectedMethod(const ScopedObjectAccessAlreadyRunnabl
   return abstract_method->GetArtMethod();
 }
 
+void ArtMethod::SetTracingEnabled(bool enabled) {
+  is_trace_enabled = enabled;
+}
+
 mirror::String* ArtMethod::GetNameAsString(Thread* self) {
   CHECK(!IsProxyMethod());
   StackHandleScope<1> hs(self);

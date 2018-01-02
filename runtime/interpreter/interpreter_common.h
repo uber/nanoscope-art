@@ -141,6 +141,14 @@ template<bool is_range, bool do_assignability_check>
 bool DoCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
             const Instruction* inst, uint16_t inst_data, JValue* result);
 
+template<bool is_range, bool do_assignability_check>
+bool DoCall_original(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
+            const Instruction* inst, uint16_t inst_data, JValue* result);
+
+template<bool is_range, bool do_assignability_check>
+bool DoCall_instrumented(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
+            const Instruction* inst, uint16_t inst_data, JValue* result);
+
 // Invokes the given lambda closure. This is part of the invocation support and is used by
 // DoLambdaInvoke functions.
 // Returns true on success, otherwise throws an exception and returns false.

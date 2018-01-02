@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_THREAD_H_
 #define ART_RUNTIME_THREAD_H_
 
+#include <atomic>
 #include <bitset>
 #include <deque>
 #include <iosfwd>
@@ -24,6 +25,7 @@
 #include <memory>
 #include <setjmp.h>
 #include <string>
+#include <thread>
 
 #include "arch/context.h"
 #include "arch/instruction_set.h"
@@ -71,6 +73,13 @@ namespace mirror {
 namespace verifier {
 class MethodVerifier;
 }  // namespace verifier
+
+namespace tracing {
+  extern Thread* enabled;  // We'll only trace calls that are executed on on this Thread.
+  extern int64_t data[];  // Log data.
+  extern int64_t* data_ptr;  // Position to write in the log.
+  extern std::atomic<int64_t> now;  // Current timestamp. We kick off a separate thread to sync the to the current time.
+}  // namespace tracing
 
 class ArtMethod;
 class BaseMutex;

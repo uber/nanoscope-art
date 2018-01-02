@@ -218,8 +218,9 @@ class ImtConflictTable {
 
 class ArtMethod FINAL {
  public:
-  ArtMethod() : access_flags_(0), dex_code_item_offset_(0), dex_method_index_(0),
-      method_index_(0) { }
+  bool is_trace_enabled;
+
+  ArtMethod() : is_trace_enabled(false), access_flags_(0), dex_code_item_offset_(0), dex_method_index_(0), method_index_(0) { }
 
   ArtMethod(ArtMethod* src, size_t image_pointer_size) {
     CopyFrom(src, image_pointer_size);
@@ -250,6 +251,9 @@ class ArtMethod FINAL {
   // a proxy method.
   template <ReadBarrierOption kReadBarrierOption = kWithReadBarrier>
   ALWAYS_INLINE uint32_t GetAccessFlags();
+
+  // Defaults to false. If true, we'll allow this method to be traced. We use this blacklist methods at class load time.
+  void SetTracingEnabled(bool enabled) SHARED_REQUIRES(Locks::mutator_lock_);
 
   void SetAccessFlags(uint32_t new_access_flags) {
     // Not called within a transaction.
