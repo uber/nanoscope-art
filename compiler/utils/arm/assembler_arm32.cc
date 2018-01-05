@@ -62,6 +62,14 @@ bool Arm32Assembler::ShifterOperandCanHold(Register rd ATTRIBUTE_UNUSED,
   return ShifterOperandCanHoldArm32(immediate, shifter_op);
 }
 
+void Arm32Assembler::mrrc(Register r1 ATTRIBUTE_UNUSED,
+                           Register r2 ATTRIBUTE_UNUSED,
+                           int opc1 ATTRIBUTE_UNUSED,
+                           int coproc ATTRIBUTE_UNUSED,
+                           int crm ATTRIBUTE_UNUSED) {
+  UNIMPLEMENTED(FATAL) << "mrrc not implemented for arm32.";
+}
+
 void Arm32Assembler::and_(Register rd, Register rn, const ShifterOperand& so,
                           Condition cond, SetCc set_cc) {
   EmitType01(cond, so.type(), AND, set_cc, rn, rd, so);

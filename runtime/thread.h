@@ -74,13 +74,6 @@ namespace verifier {
 class MethodVerifier;
 }  // namespace verifier
 
-namespace tracing {
-  extern Thread* enabled;  // We'll only trace calls that are executed on on this Thread.
-  extern int64_t data[];  // Log data.
-  extern int64_t* data_ptr;  // Position to write in the log.
-  extern std::atomic<int64_t> now;  // Current timestamp. We kick off a separate thread to sync the to the current time.
-}  // namespace tracing
-
 class ArtMethod;
 class BaseMutex;
 class ClassLinker;
@@ -156,6 +149,18 @@ static constexpr size_t kNumRosAllocThreadLocalSizeBracketsInThread = 16;
 class Thread {
  public:
   static const size_t kStackOverflowImplicitCheckSize;
+
+  // Called from the interpreter to log the start of a method.
+  ALWAYS_INLINE void TraceStart(ArtMethod* method);
+
+  // Called from the interpreter to log the end of a method.
+  ALWAYS_INLINE void TraceEnd(ArtMethod* method);
+
+  // Enables tracing on this Thread.
+  void StartTracing() SHARED_REQUIRES(Locks::mutator_lock_);
+
+  // Disables tracing on this Thread and flushes logs to the file at out_path.
+  void StopTracing(std::string out_path) SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Creates a new native thread corresponding to the given managed peer.
   // Used to implement Thread.start.
@@ -639,6 +644,10 @@ class Thread {
     return ThreadOffsetFromTlsPtr<pointer_size>(OFFSETOF_MEMBER(tls_ptr_sized_values, opeer));
   }
 
+  template<size_t pointer_size>
+  static ThreadOffset<pointer_size> TraceDataPtrOffset() {
+    return ThreadOffsetFromTlsPtr<pointer_size>(OFFSETOF_MEMBER(tls_ptr_sized_values, trace_data_ptr));
+  }
 
   template<size_t pointer_size>
   static ThreadOffset<pointer_size> CardTableOffset() {
@@ -1363,7 +1372,7 @@ class Thread {
   } tls64_;
 
   struct PACKED(sizeof(void*)) tls_ptr_sized_values {
-      tls_ptr_sized_values() : card_table(nullptr), exception(nullptr), stack_end(nullptr),
+      tls_ptr_sized_values() : trace_data_ptr(nullptr), trace_data(nullptr), card_table(nullptr), exception(nullptr), stack_end(nullptr),
       managed_stack(), suspend_trigger(nullptr), jni_env(nullptr), tmp_jni_env(nullptr),
       self(nullptr), opeer(nullptr), jpeer(nullptr), stack_begin(nullptr), stack_size(0),
       stack_trace_sample(nullptr), wait_next(nullptr), monitor_enter_object(nullptr),
@@ -1379,6 +1388,12 @@ class Thread {
       thread_local_mark_stack(nullptr) {
       std::fill(held_mutexes, held_mutexes + kLockLevelCount, nullptr);
     }
+
+    // Marks our current position in trace_data.
+    int64_t* trace_data_ptr;
+
+    // Holds our tracing log data.
+    int64_t* trace_data;
 
     // The biased card table, see CardTable for details.
     uint8_t* card_table;

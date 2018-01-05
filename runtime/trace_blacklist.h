@@ -25,7 +25,7 @@ namespace tracing {
 
   // Use this instead of LOG to avoid lock issues. Unclear why LOG causes problems.
   void log(std::string message) {
-    LogMessage::LogLine(__FILE__, __LINE__, LogSeverity::FATAL, message.c_str());
+    LogMessage::LogLine(__FILE__, __LINE__, LogSeverity::WARNING, message.c_str());
   }
 
   bool initialize_blacklist() {

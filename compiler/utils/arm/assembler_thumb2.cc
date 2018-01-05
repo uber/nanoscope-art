@@ -539,6 +539,14 @@ bool Thumb2Assembler::ShifterOperandCanHold(Register rd ATTRIBUTE_UNUSED,
   }
 }
 
+void Thumb2Assembler::mrrc(Register r1, Register r2, int opc1, int coproc, int crm) {
+  // ARM Architecture Reference Manual: Thumb-2 Supplement 4.6.81
+  uint32_t hw1 = (0b111011000101 << 4) | (static_cast<uint32_t>(r2) << 0);
+  uint32_t hw2 = (static_cast<uint32_t>(r1) << 12) | (coproc << 8) | (opc1 << 4) | (crm << 0);
+  // Note that Emit32 swaps hw1 and hw2 parts for us so we order them in the natural order here.
+  Emit32(hw1 << 16 | hw2);
+}
+
 void Thumb2Assembler::and_(Register rd, Register rn, const ShifterOperand& so,
                            Condition cond, SetCc set_cc) {
   EmitDataProcessing(cond, AND, set_cc, rn, rd, so);

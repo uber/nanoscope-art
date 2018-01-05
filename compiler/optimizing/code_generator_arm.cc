@@ -1227,6 +1227,76 @@ void InstructionCodeGeneratorARM::HandleGoto(HInstruction* got, HBasicBlock* suc
   }
 }
 
+void LocationsBuilderARM::VisitTraceStart(HTraceStart* trace_start) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(trace_start);
+  // Logic here was derived by trial and error. For example, we include add an extra temp register here
+  // because it seems to force the first 3 temps to never be kMethodRegisterArgument. Otherwise, kMethodRegisterArgument
+  // is sometimes assigned to one of our temps and ends up being overwritten. It would be preferable to be able
+  // to assign specific registers like we do in LocationsBuilderARM::VisitTraceEnd, but for some reason that results in
+  // incorrect behavior when applied here.
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+}
+
+void InstructionCodeGeneratorARM::VisitTraceStart(HTraceStart* trace_start) {
+  Label done;
+  LocationSummary* locations = trace_start->GetLocations();
+  Register trace_data_ptr = locations->GetTemp(2).AsRegister<Register>();
+  // Indices matters here since strd requires temp2==temp1+1 and temps seem to always be
+  // in descending order. ARM A1 encoding also requires temp1 to be even, but we're assuming
+  // Thumb2 which doesn't have this requirement.
+  Register temp1 = locations->GetTemp(1).AsRegister<Register>();
+  Register temp2 = locations->GetTemp(0).AsRegister<Register>();
+  // trace_data_ptr = tr->tlsptr_.trace_data_ptr;
+  __ LoadFromOffset(kLoadWord, trace_data_ptr, TR, Thread::TraceDataPtrOffset<kArmWordSize>().Int32Value());
+  // if (trace_data_ptr == null) return;
+  __ cbz(trace_data_ptr, &done);
+  // *trace_data_ptr++ = art_method;
+  __ str(kMethodRegisterArgument, Address(trace_data_ptr, 8, Address::Mode::PostIndex));
+  // temp1, temp2 = timestamp
+  __ mrrc(temp1, temp2, 0b0001, 0b1111, 0b1110);
+  // *trace_data_ptr++ = temp1, temp2 (timestamp);
+  __ strd(temp1, Address(trace_data_ptr, 8, Address::Mode::PostIndex));
+  // tr->tlsptr_.trace_data_ptr = trace_data_ptr;
+  __ StoreToOffset(kStoreWord, trace_data_ptr, TR, Thread::TraceDataPtrOffset<kArmWordSize>().Int32Value());
+  __ Bind(&done);
+}
+
+void LocationsBuilderARM::VisitTraceEnd(HTraceEnd* trace_end) {
+  LocationSummary* locations =
+      new (GetGraph()->GetArena()) LocationSummary(trace_end);
+  // Assign specific registers since we want our temps to be consecutive in InstructionCodeGeneratorARM::VisitTraceEnd.
+  locations->AddTemp(Location::RegisterLocation(1));
+  locations->AddTemp(Location::RegisterLocation(2));
+  locations->AddTemp(Location::RegisterLocation(3));
+}
+
+void InstructionCodeGeneratorARM::VisitTraceEnd(HTraceEnd* trace_end) {
+  Label done;
+  LocationSummary* locations = trace_end->GetLocations();
+  Register trace_data_ptr = locations->GetTemp(0).AsRegister<Register>();
+  Register temp1 = locations->GetTemp(1).AsRegister<Register>();
+  Register temp2 = locations->GetTemp(2).AsRegister<Register>();
+  // trace_data_ptr = tr->tlsptr_.trace_data_ptr;
+  __ LoadFromOffset(kLoadWord, trace_data_ptr, TR, Thread::TraceDataPtrOffset<kArmWordSize>().Int32Value());
+  // if (trace_data_ptr == null) return;
+  __ cbz(trace_data_ptr, &done);
+  // temp1 = 0
+  __ LoadImmediate(temp1, 0);
+  // *trace_data_ptr++ = temp1 (0);
+  __ str(temp1, Address(trace_data_ptr, 8, Address::Mode::PostIndex));
+  // temp1, temp2 = timestamp
+  __ mrrc(temp1, temp2, 0b0001, 0b1111, 0b1110);
+  // *trace_data_ptr++ = temp1, temp2 (timestamp);
+  __ strd(temp1, Address(trace_data_ptr, 8, Address::Mode::PostIndex));
+  // tr->tlsptr_.trace_data_ptr = trace_data_ptr;
+  __ StoreToOffset(kStoreWord, trace_data_ptr, TR, Thread::TraceDataPtrOffset<kArmWordSize>().Int32Value());
+  __ Bind(&done);
+}
+
 void LocationsBuilderARM::VisitGoto(HGoto* got) {
   got->SetLocations(nullptr);
 }

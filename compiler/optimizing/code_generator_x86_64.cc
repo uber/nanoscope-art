@@ -1243,6 +1243,14 @@ void InstructionCodeGeneratorX86_64::HandleGoto(HInstruction* got, HBasicBlock* 
   }
 }
 
+void LocationsBuilderX86_64::VisitTraceStart(HTraceStart* trace_start ATTRIBUTE_UNUSED) { }
+
+void InstructionCodeGeneratorX86_64::VisitTraceStart(HTraceStart* trace_start ATTRIBUTE_UNUSED) { }
+
+void LocationsBuilderX86_64::VisitTraceEnd(HTraceEnd* trace_end ATTRIBUTE_UNUSED) { }
+
+void InstructionCodeGeneratorX86_64::VisitTraceEnd(HTraceEnd* trace_end ATTRIBUTE_UNUSED) { }
+
 void LocationsBuilderX86_64::VisitGoto(HGoto* got) {
   got->SetLocations(nullptr);
 }

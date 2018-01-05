@@ -440,6 +440,9 @@ class ArmAssembler : public Assembler {
   // Is this assembler for the thumb instruction set?
   virtual bool IsThumb() const = 0;
 
+  // Load double-word system register into r1 and r2.
+  virtual void mrrc(Register r1, Register r2, int opc1, int coproc, int crm) = 0;
+
   // Data-processing instructions.
   virtual void and_(Register rd, Register rn, const ShifterOperand& so,
                     Condition cond = AL, SetCc set_cc = kCcDontCare) = 0;

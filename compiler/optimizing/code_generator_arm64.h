@@ -210,6 +210,10 @@ class InstructionCodeGeneratorARM64 : public InstructionCodeGenerator {
   vixl::MacroAssembler* GetVIXLAssembler() { return GetAssembler()->vixl_masm_; }
 
  private:
+  // Generate code for either an HTraceStart or HTraceEnd instruction. We use trace_data to choose
+  // whether to write the current method in the start case (kArtMethodRegister) or nullptr (wzr) in
+  // the end case.
+  void GenerateTraceEvent(vixl::Register trace_data);
   void GenerateClassInitializationCheck(SlowPathCodeARM64* slow_path, vixl::Register class_reg);
   void GenerateSuspendCheck(HSuspendCheck* instruction, HBasicBlock* successor);
   void HandleBinaryOp(HBinaryOperation* instr);

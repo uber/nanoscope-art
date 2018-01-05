@@ -1261,6 +1261,8 @@ class HLoopInformationOutwardIterator : public ValueObject {
   M(Sub, BinaryOperation)                                               \
   M(SuspendCheck, Instruction)                                          \
   M(Throw, Instruction)                                                 \
+  M(TraceStart, Instruction)                                            \
+  M(TraceEnd, Instruction)                                              \
   M(TryBoundary, Instruction)                                           \
   M(TypeConversion, Instruction)                                        \
   M(UShr, BinaryOperation)                                              \
@@ -2305,6 +2307,46 @@ class HExpression : public HTemplateInstruction<N> {
   static_assert(kNumberOfExpressionPackedBits <= HInstruction::kMaxNumberOfPackedBits,
                 "Too many packed fields.");
   using TypeField = BitField<Primitive::Type, kFieldType, kFieldTypeSize>;
+};
+
+/**
+ * This instruction marks where we should generate our per-method "start trace" logic. Actual code generation
+ * happens in code_generator_<arch>.cc. For now, we only have implementations for arch=arm|arm64.
+ */
+class HTraceStart : public HTemplateInstruction<0> {
+ public:
+  explicit HTraceStart()
+      : HTemplateInstruction(SideEffects::None(), 0u) {}
+
+  // Added this override in hopes of it forcing temps to never be equal to kMethodRegisterArgument.
+  // This didn't work (or we need some additional logic elsewhere), but going to leave this as it doesn't
+  // break anything and may be required for other unknown reasons.
+  bool NeedsEnvironment() const OVERRIDE { return true; }
+
+  DECLARE_INSTRUCTION(TraceStart);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HTraceStart);
+};
+
+/**
+ * This instruction marks where we should generate our per-method "end trace" logic. Actual code generation
+ * happens in code_generator_<arch>.cc. For now, we only have implementations for arch=arm|arm64.
+ */
+class HTraceEnd : public HTemplateInstruction<0> {
+ public:
+  explicit HTraceEnd()
+      : HTemplateInstruction(SideEffects::None(), 0u) {}
+
+  // Added this override in hopes of it forcing temps to never be equal to kMethodRegisterArgument.
+  // This didn't work (or we need some additional logic elsewhere), but going to leave this as it doesn't
+  // break anything and may be required for other unknown reasons.
+  bool NeedsEnvironment() const OVERRIDE { return true; }
+
+  DECLARE_INSTRUCTION(TraceEnd);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(HTraceEnd);
 };
 
 // Represents dex's RETURN_VOID opcode. A HReturnVoid is a control flow

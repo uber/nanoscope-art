@@ -37,6 +37,8 @@ class Arm32Assembler FINAL : public ArmAssembler {
     return false;
   }
 
+  virtual void mrrc(Register r1, Register r2, int opc1, int coproc, int crm) OVERRIDE;
+
   // Data-processing instructions.
   virtual void and_(Register rd, Register rn, const ShifterOperand& so,
                     Condition cond = AL, SetCc set_cc = kCcDontCare) OVERRIDE;

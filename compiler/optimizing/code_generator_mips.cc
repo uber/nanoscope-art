@@ -2577,6 +2577,14 @@ void InstructionCodeGeneratorMIPS::VisitFloatConstant(HFloatConstant* constant A
   // Will be generated at use site.
 }
 
+void LocationsBuilderMIPS::VisitTraceStart(HTraceStart* trace_start ATTRIBUTE_UNUSED) { }
+
+void InstructionCodeGeneratorMIPS::VisitTraceStart(HTraceStart* trace_start ATTRIBUTE_UNUSED) { }
+
+void LocationsBuilderMIPS::VisitTraceEnd(HTraceEnd* trace_end ATTRIBUTE_UNUSED) { }
+
+void InstructionCodeGeneratorMIPS::VisitTraceEnd(HTraceEnd* trace_end ATTRIBUTE_UNUSED) { }
+
 void LocationsBuilderMIPS::VisitGoto(HGoto* got) {
   got->SetLocations(nullptr);
 }

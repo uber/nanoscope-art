@@ -2219,6 +2219,14 @@ void InstructionCodeGeneratorMIPS64::HandleGoto(HInstruction* got, HBasicBlock* 
   }
 }
 
+void LocationsBuilderMIPS64::VisitTraceStart(HTraceStart* trace_start ATTRIBUTE_UNUSED) { }
+
+void InstructionCodeGeneratorMIPS64::VisitTraceStart(HTraceStart* trace_start ATTRIBUTE_UNUSED) { }
+
+void LocationsBuilderMIPS64::VisitTraceEnd(HTraceEnd* trace_end ATTRIBUTE_UNUSED) { }
+
+void InstructionCodeGeneratorMIPS64::VisitTraceEnd(HTraceEnd* trace_end ATTRIBUTE_UNUSED) { }
+
 void LocationsBuilderMIPS64::VisitGoto(HGoto* got) {
   got->SetLocations(nullptr);
 }

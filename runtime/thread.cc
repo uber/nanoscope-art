@@ -85,50 +85,6 @@
 
 namespace art {
 
-namespace tracing {
-  Thread* enabled = nullptr;
-  int64_t data[40000000];  // Enough room for 20M methods
-  int64_t* data_ptr = &data[0];
-  std::atomic<int64_t> now;
-  std::thread* now_syncer = nullptr;
-
-  void Start(Thread* self)
-    SHARED_REQUIRES(Locks::mutator_lock_) {
-    if (::art::tracing::now_syncer == nullptr) {
-      ::art::tracing::now_syncer = new std::thread([]() {
-        // Constantly sync the current timestamp.
-        while (true) {
-          ::art::tracing::now = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
-        }
-      });
-    }
-    ::art::tracing::now = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
-    ::art::tracing::enabled = self;
-  }
-
-  void Stop(Thread* self ATTRIBUTE_UNUSED, std::string out_path)
-    SHARED_REQUIRES(Locks::mutator_lock_) {
-    ::art::tracing::enabled = nullptr;
-
-    // Write trace log to given path.
-    std::ofstream out(out_path, std::ofstream::trunc);
-    if (out.is_open()) {
-      int64_t* ptr = &data[0];
-      while (ptr < data_ptr) {
-        ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
-        int64_t timestamp = *ptr++;
-        std::string message = method == nullptr ? "POP" : PrettyMethod(method);
-        out << message << ":" << timestamp << "\n";
-      }
-    } else {
-      LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
-    }
-
-    // Reset log pointer.
-    ::art::tracing::data_ptr = &data[0];
-  }
-}  // namespace tracing
-
 bool Thread::is_started_ = false;
 pthread_key_t Thread::pthread_key_self_;
 ConditionVariable* Thread::resume_cond_ = nullptr;
@@ -145,6 +101,62 @@ static constexpr bool kVerifyImageObjectsMarked = kIsDebugBuild;
 constexpr size_t kStackOverflowProtectedSize = 4 * kMemoryToolStackGuardSizeScale * KB;
 
 static const char* kThreadNameDuringStartup = "<native thread without managed peer>";
+
+// Returns the Generic Timer count. This uses the same timer register used in the compiled code instrumentation.
+uint64_t ALWAYS_INLINE generic_timer_count() {
+  uint64_t t = 0;
+  #if defined(__arm__)
+  uint32_t t1, t2;
+  asm("mrrc p15, 1, %0, %1, c14" : "=r"(t1), "=r"(t2));
+  t = t2;
+  t = t << 32 | t1;
+  #elif defined(__aarch64__)
+  asm("mrs %0, cntvct_el0" : "=r"(t));
+  #endif
+  return t;
+}
+
+void Thread::TraceStart(ArtMethod* method) {
+  if (UNLIKELY(method->is_trace_enabled)) {  // Only trace if we haven't blacklisted the ArtMethod. Use compiler hint to favor blacklisted method performance.
+    if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {  // Only trace if we're on the correct Thread. Use compiler hint to favor the performance of the traced Thread.
+      *tlsPtr_.trace_data_ptr++ = reinterpret_cast<int64_t>(method);
+      *tlsPtr_.trace_data_ptr++ = generic_timer_count();
+    }
+  }
+}
+
+void Thread::TraceEnd(ArtMethod* method) {
+  if (UNLIKELY(method->is_trace_enabled)) {
+    if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {
+      *tlsPtr_.trace_data_ptr++ = 0;
+      *tlsPtr_.trace_data_ptr++ = generic_timer_count();
+    }
+  }
+}
+
+void Thread::StartTracing() {
+  tlsPtr_.trace_data = new int64_t[40000000];  // Enough room for 10M methods
+  tlsPtr_.trace_data_ptr = tlsPtr_.trace_data;
+}
+
+void Thread::StopTracing(std::string out_path) {
+  std::ofstream out(out_path, std::ofstream::trunc);
+  if (out.is_open()) {
+    int64_t* ptr = tlsPtr_.trace_data;
+    while (ptr < tlsPtr_.trace_data_ptr) {
+      ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
+      int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
+      std::string pretty_method = method == nullptr ? "POP" : PrettyMethod(method);
+      out << timestamp << ":" << pretty_method << "\n";
+    }
+  } else {
+    LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
+  }
+
+  delete[] tlsPtr_.trace_data;
+  tlsPtr_.trace_data = nullptr;
+  tlsPtr_.trace_data_ptr = nullptr;
+}
 
 void Thread::InitCardTable() {
   tlsPtr_.card_table = Runtime::Current()->GetHeap()->GetCardTable()->GetBiasedBegin();
@@ -929,11 +941,11 @@ void Thread::InitPeer(ScopedObjectAccess& soa, jboolean thread_is_daemon, jobjec
 void Thread::SetThreadName(const char* name) {
   std::string name_str(name);
   if (name_str.compare("START_TRACING") == 0) {
-    ::art::tracing::Start(this);
+    StartTracing();
     return;
   } else if (name_str.find("STOP_TRACING:") == 0) {
     std::string out_path = name_str.substr(std::strlen("STOP_TRACING:"));
-    ::art::tracing::Stop(this, out_path);
+    StopTracing(out_path);
     return;
   }
   tlsPtr_.name->assign(name);

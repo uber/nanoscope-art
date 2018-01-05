@@ -823,14 +823,7 @@ bool DoCall_original(ArtMethod* called_method, Thread* self, ShadowFrame& shadow
 template<bool is_range, bool do_assignability_check>
 bool DoCall_instrumented(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
             const Instruction* inst, uint16_t inst_data, JValue* result) SHARED_REQUIRES(Locks::mutator_lock_) {
-  if (UNLIKELY(called_method->is_trace_enabled)) {  // Only trace if we haven't blacklisted the ArtMethod. Use compiler hint to favor blacklisted method performance.
-    if (LIKELY(self == ::art::tracing::enabled)) {  // Only trace if we're on the correct Thread. Use compiler hint to favor the performance of the traced Thread.
-      *::art::tracing::data_ptr = reinterpret_cast<uint64_t>(called_method);  // Store method identifier. We're using the ArtMethod pointer directly for now.
-      ++::art::tracing::data_ptr;
-      *::art::tracing::data_ptr = ::art::tracing::now;  // Store the current timestamp.
-      ++::art::tracing::data_ptr;
-    }
-  }
+  self->TraceStart(called_method);
 
   // Argument word count.
   const uint16_t number_of_inputs =
@@ -851,14 +844,7 @@ bool DoCall_instrumented(ArtMethod* called_method, Thread* self, ShadowFrame& sh
       called_method, self, shadow_frame,
       result, number_of_inputs, arg, vregC);
 
-  if (UNLIKELY(called_method->is_trace_enabled)) {
-    if (LIKELY(self == ::art::tracing::enabled)) {
-      *::art::tracing::data_ptr = reinterpret_cast<uint64_t>(nullptr);  // Use nullptr to represent a method "pop".
-      ++::art::tracing::data_ptr;
-      *::art::tracing::data_ptr = ::art::tracing::now;
-      ++::art::tracing::data_ptr;
-    }
-  }
+  self->TraceEnd(called_method);
   return r;
 }
 

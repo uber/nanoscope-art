@@ -70,6 +70,17 @@ using helpers::XRegisterFrom;
 using helpers::ARM64EncodableConstantOrRegister;
 using helpers::ArtVixlRegCodeCoherentForRegSet;
 
+// Generic Timer virtual count register.
+//
+// System register encodings taken from ARM Architecture Reference Manual D10.4.2
+// Note: SysO0 here refers to o0 which is is 1 bit while op0 in the reference manual
+// is 2 bits. o0 is the least significant bit of op0.
+uint16_t SYS_CNTVCT_EL0 = ((1 << SysO0_offset) |
+                            (3 << SysOp1_offset) |
+                            (14 << CRn_offset) |
+                            (0 << CRm_offset) |
+                            (2 << SysOp2_offset)) >> ImmSystemRegister_offset;
+
 static constexpr int kCurrentMethodStackOffset = 0;
 // The compare/jump sequence will generate about (1.5 * num_entries + 3) instructions. While jump
 // table version generates 7 instructions and num_entries literals. Compare/jump sequence will
@@ -2782,6 +2793,41 @@ void InstructionCodeGeneratorARM64::HandleGoto(HInstruction* got, HBasicBlock* s
   if (!codegen_->GoesToNextBlock(block, successor)) {
     __ B(codegen_->GetLabelOf(successor));
   }
+}
+
+void InstructionCodeGeneratorARM64::GenerateTraceEvent(Register trace_data) {
+  // 64-bit code generator uses the vixl library which provides its own management of temp registers so we
+  // don't need to deal with LocationBuilder here like we do in the 32-bit code generator.
+  UseScratchRegisterScope temps(GetVIXLAssembler());
+  Register trace_data_ptr = temps.AcquireX();
+  Register timestamp = temps.AcquireX();
+
+  vixl::Label done;
+  // trace_data_ptr = tr->tlsptr_.trace_data_ptr;
+  __ Ldr(trace_data_ptr, MemOperand(tr, Thread::TraceDataPtrOffset<kArm64WordSize>().Int32Value()));
+  // if (trace_data_ptr == null) return;
+  __ Cbz(trace_data_ptr, &done);
+  // timestamp = <cycle count>;
+  __ Mrs(timestamp, (SystemRegister) SYS_CNTVCT_EL0);
+  // *trace_data_ptr++ = trace_data (art_method or nullptr);
+  __ Str(trace_data, MemOperand(trace_data_ptr, sizeof(int64_t), PostIndex));
+  // *trace_data_ptr++ = timestamp;
+  __ Str(timestamp, MemOperand(trace_data_ptr, sizeof(int64_t), PostIndex));
+  // tr->tlsptr_.trace_data_ptr = trace_data_ptr;
+  __ Str(trace_data_ptr, MemOperand(tr, Thread::TraceDataPtrOffset<kArm64WordSize>().Int32Value()));
+  __ Bind(&done);
+}
+
+void LocationsBuilderARM64::VisitTraceStart(HTraceStart* trace_start ATTRIBUTE_UNUSED) { }
+
+void InstructionCodeGeneratorARM64::VisitTraceStart(HTraceStart* trace_start ATTRIBUTE_UNUSED) {
+  GenerateTraceEvent(kArtMethodRegister);
+}
+
+void LocationsBuilderARM64::VisitTraceEnd(HTraceEnd* trace_end ATTRIBUTE_UNUSED) { }
+
+void InstructionCodeGeneratorARM64::VisitTraceEnd(HTraceEnd* trace_end ATTRIBUTE_UNUSED) {
+  GenerateTraceEvent(wzr);
 }
 
 void LocationsBuilderARM64::VisitGoto(HGoto* got) {
