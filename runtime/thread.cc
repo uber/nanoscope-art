@@ -28,6 +28,7 @@
 #include <list>
 #include <sstream>
 #include <fstream>
+#include <stdio.h>
 
 #include "arch/context.h"
 #include "art_field-inl.h"
@@ -116,6 +117,25 @@ uint64_t ALWAYS_INLINE generic_timer_count() {
   return t;
 }
 
+void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
+  SHARED_REQUIRES(Locks::mutator_lock_) {
+  std::string out_path_tmp = out_path + ".tmp";
+  std::ofstream out(out_path_tmp, std::ofstream::trunc);
+  int64_t* ptr = trace_data;
+  if (out.is_open()) {
+    while (ptr < end) {
+      ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
+      int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
+      std::string pretty_method = method == nullptr ? "POP" : PrettyMethod(method);
+      out << timestamp << ":" << pretty_method << "\n";
+    }
+    std::rename(out_path_tmp.c_str(), out_path.c_str());
+  } else {
+    LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
+  }
+  delete[] trace_data;
+}
+
 void Thread::TraceStart(ArtMethod* method) {
   if (UNLIKELY(method->is_trace_enabled)) {  // Only trace if we haven't blacklisted the ArtMethod. Use compiler hint to favor blacklisted method performance.
     if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {  // Only trace if we're on the correct Thread. Use compiler hint to favor the performance of the traced Thread.
@@ -140,20 +160,7 @@ void Thread::StartTracing() {
 }
 
 void Thread::StopTracing(std::string out_path) {
-  std::ofstream out(out_path, std::ofstream::trunc);
-  if (out.is_open()) {
-    int64_t* ptr = tlsPtr_.trace_data;
-    while (ptr < tlsPtr_.trace_data_ptr) {
-      ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
-      int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
-      std::string pretty_method = method == nullptr ? "POP" : PrettyMethod(method);
-      out << timestamp << ":" << pretty_method << "\n";
-    }
-  } else {
-    LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
-  }
-
-  delete[] tlsPtr_.trace_data;
+  new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr);
   tlsPtr_.trace_data = nullptr;
   tlsPtr_.trace_data_ptr = nullptr;
 }
