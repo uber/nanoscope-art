@@ -798,8 +798,8 @@ bool DoLambdaCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_fr
 }
 
 template<bool is_range, bool do_assignability_check>
-bool DoCall_original(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
-            const Instruction* inst, uint16_t inst_data, JValue* result) SHARED_REQUIRES(Locks::mutator_lock_) {
+bool DoCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
+            const Instruction* inst, uint16_t inst_data, JValue* result) {
   // Argument word count.
   const uint16_t number_of_inputs =
       (is_range) ? inst->VRegA_3rc(inst_data) : inst->VRegA_35c(inst_data);
@@ -818,46 +818,6 @@ bool DoCall_original(ArtMethod* called_method, Thread* self, ShadowFrame& shadow
   return DoCallCommon<is_range, do_assignability_check>(
       called_method, self, shadow_frame,
       result, number_of_inputs, arg, vregC);
-}
-
-template<bool is_range, bool do_assignability_check>
-bool DoCall_instrumented(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
-            const Instruction* inst, uint16_t inst_data, JValue* result) SHARED_REQUIRES(Locks::mutator_lock_) {
-  self->TraceStart(called_method);
-
-  // Argument word count.
-  const uint16_t number_of_inputs =
-      (is_range) ? inst->VRegA_3rc(inst_data) : inst->VRegA_35c(inst_data);
-
-  // TODO: find a cleaner way to separate non-range and range information without duplicating
-  //       code.
-  uint32_t arg[Instruction::kMaxVarArgRegs] = {};  // only used in invoke-XXX.
-  uint32_t vregC = 0;
-  if (is_range) {
-    vregC = inst->VRegC_3rc();
-  } else {
-    vregC = inst->VRegC_35c();
-    inst->GetVarArgs(arg, inst_data);
-  }
-
-  bool r = DoCallCommon<is_range, do_assignability_check>(
-      called_method, self, shadow_frame,
-      result, number_of_inputs, arg, vregC);
-
-  self->TraceEnd(called_method);
-  return r;
-}
-
-template<bool is_range, bool do_assignability_check>
-bool DoCall(ArtMethod* called_method, Thread* self, ShadowFrame& shadow_frame,
-            const Instruction* inst, uint16_t inst_data, JValue* result) {
-  return DoCall_instrumented<is_range, do_assignability_check>(called_method, self, shadow_frame, inst, inst_data, result);
-  // Use commented logic below for measuring instrumentation overhead.
-  // if (strcmp(called_method->GetName(), "instr") == 0) {
-  //   return DoCall_instrumented<is_range, do_assignability_check>(called_method, self, shadow_frame, inst, inst_data, result);
-  // } else {
-  //   return DoCall_original<is_range, do_assignability_check>(called_method, self, shadow_frame, inst, inst_data, result);
-  // }
 }
 
 template <bool is_range, bool do_access_check, bool transaction_active>
@@ -984,33 +944,6 @@ EXPLICIT_DO_CALL_TEMPLATE_DECL(false, true);
 EXPLICIT_DO_CALL_TEMPLATE_DECL(true, false);
 EXPLICIT_DO_CALL_TEMPLATE_DECL(true, true);
 #undef EXPLICIT_DO_CALL_TEMPLATE_DECL
-
-// Explicit DoCall template function declarations.
-#define EXPLICIT_DO_CALL_ORIGINAL_TEMPLATE_DECL(_is_range, _do_assignability_check)                      \
-  template SHARED_REQUIRES(Locks::mutator_lock_)                                                \
-  bool DoCall_original<_is_range, _do_assignability_check>(ArtMethod* method, Thread* self,              \
-                                                  ShadowFrame& shadow_frame,                    \
-                                                  const Instruction* inst, uint16_t inst_data,  \
-                                                  JValue* result)
-EXPLICIT_DO_CALL_ORIGINAL_TEMPLATE_DECL(false, false);
-EXPLICIT_DO_CALL_ORIGINAL_TEMPLATE_DECL(false, true);
-EXPLICIT_DO_CALL_ORIGINAL_TEMPLATE_DECL(true, false);
-EXPLICIT_DO_CALL_ORIGINAL_TEMPLATE_DECL(true, true);
-#undef EXPLICIT_DO_CALL_ORIGINAL_TEMPLATE_DECL
-
-// Explicit DoCall template function declarations.
-#define EXPLICIT_DO_CALL_INSTRUMENTED_TEMPLATE_DECL(_is_range, _do_assignability_check)                      \
-  template SHARED_REQUIRES(Locks::mutator_lock_)                                                \
-  bool DoCall_instrumented<_is_range, _do_assignability_check>(ArtMethod* method, Thread* self,              \
-                                                  ShadowFrame& shadow_frame,                    \
-                                                  const Instruction* inst, uint16_t inst_data,  \
-                                                  JValue* result)
-EXPLICIT_DO_CALL_INSTRUMENTED_TEMPLATE_DECL(false, false);
-EXPLICIT_DO_CALL_INSTRUMENTED_TEMPLATE_DECL(false, true);
-EXPLICIT_DO_CALL_INSTRUMENTED_TEMPLATE_DECL(true, false);
-EXPLICIT_DO_CALL_INSTRUMENTED_TEMPLATE_DECL(true, true);
-#undef EXPLICIT_DO_CALL_INSTRUMENTED_TEMPLATE_DECL
-
 
 // Explicit DoLambdaCall template function declarations.
 #define EXPLICIT_DO_LAMBDA_CALL_TEMPLATE_DECL(_is_range, _do_assignability_check)               \

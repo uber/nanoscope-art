@@ -310,32 +310,41 @@ static inline JValue Execute(
   ArtMethod* method = shadow_frame.GetMethod();
   DCHECK(!method->SkipAccessChecks() || !method->MustCountLocks());
 
+  self->TraceStart(method);
   bool transaction_active = Runtime::Current()->IsActiveTransaction();
   if (LIKELY(method->SkipAccessChecks())) {
     // Enter the "without access check" interpreter.
     if (kInterpreterImplKind == kMterpImplKind) {
       if (transaction_active) {
         // No Mterp variant - just use the switch interpreter.
-        return ExecuteSwitchImpl<false, true>(self, code_item, shadow_frame, result_register,
+        result_register = ExecuteSwitchImpl<false, true>(self, code_item, shadow_frame, result_register,
                                               false);
+        self->TraceEnd(method);
+        return result_register;
       } else if (UNLIKELY(!Runtime::Current()->IsStarted())) {
-        return ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register,
+        result_register = ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register,
                                                false);
+        self->TraceEnd(method);
+        return result_register;
       } else {
         while (true) {
           // Mterp does not support all instrumentation/debugging.
           if (MterpShouldSwitchInterpreters()) {
-            return ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register,
+            result_register = ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register,
                                                    false);
+            self->TraceEnd(method);
+            return result_register;
           }
           bool returned = ExecuteMterpImpl(self, code_item, &shadow_frame, &result_register);
           if (returned) {
+            self->TraceEnd(method);
             return result_register;
           } else {
             // Mterp didn't like that instruction.  Single-step it with the reference interpreter.
             result_register = ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame,
                                                                result_register, true);
             if (shadow_frame.GetDexPC() == DexFile::kDexNoIndex) {
+              self->TraceEnd(method);
               // Single-stepped a return or an exception not handled locally.  Return to caller.
               return result_register;
             }
@@ -344,18 +353,26 @@ static inline JValue Execute(
       }
     } else if (kInterpreterImplKind == kSwitchImplKind) {
       if (transaction_active) {
-        return ExecuteSwitchImpl<false, true>(self, code_item, shadow_frame, result_register,
+        result_register = ExecuteSwitchImpl<false, true>(self, code_item, shadow_frame, result_register,
                                               false);
+        self->TraceEnd(method);
+        return result_register;
       } else {
-        return ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register,
+        result_register = ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register,
                                                false);
+        self->TraceEnd(method);
+        return result_register;
       }
     } else {
       DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
       if (transaction_active) {
-        return ExecuteGotoImpl<false, true>(self, code_item, shadow_frame, result_register);
+        result_register = ExecuteGotoImpl<false, true>(self, code_item, shadow_frame, result_register);
+        self->TraceEnd(method);
+        return result_register;
       } else {
-        return ExecuteGotoImpl<false, false>(self, code_item, shadow_frame, result_register);
+        result_register = ExecuteGotoImpl<false, false>(self, code_item, shadow_frame, result_register);
+        self->TraceEnd(method);
+        return result_register;
       }
     }
   } else {
@@ -363,26 +380,38 @@ static inline JValue Execute(
     if (kInterpreterImplKind == kMterpImplKind) {
       // No access check variants for Mterp.  Just use the switch version.
       if (transaction_active) {
-        return ExecuteSwitchImpl<true, true>(self, code_item, shadow_frame, result_register,
+        result_register = ExecuteSwitchImpl<true, true>(self, code_item, shadow_frame, result_register,
                                              false);
+        self->TraceEnd(method);
+        return result_register;
       } else {
-        return ExecuteSwitchImpl<true, false>(self, code_item, shadow_frame, result_register,
+        result_register = ExecuteSwitchImpl<true, false>(self, code_item, shadow_frame, result_register,
                                               false);
+        self->TraceEnd(method);
+        return result_register;
       }
     } else if (kInterpreterImplKind == kSwitchImplKind) {
       if (transaction_active) {
-        return ExecuteSwitchImpl<true, true>(self, code_item, shadow_frame, result_register,
+        result_register = ExecuteSwitchImpl<true, true>(self, code_item, shadow_frame, result_register,
                                              false);
+        self->TraceEnd(method);
+        return result_register;
       } else {
-        return ExecuteSwitchImpl<true, false>(self, code_item, shadow_frame, result_register,
+        result_register = ExecuteSwitchImpl<true, false>(self, code_item, shadow_frame, result_register,
                                               false);
+        self->TraceEnd(method);
+        return result_register;
       }
     } else {
       DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
       if (transaction_active) {
-        return ExecuteGotoImpl<true, true>(self, code_item, shadow_frame, result_register);
+        result_register = ExecuteGotoImpl<true, true>(self, code_item, shadow_frame, result_register);
+        self->TraceEnd(method);
+        return result_register;
       } else {
-        return ExecuteGotoImpl<true, false>(self, code_item, shadow_frame, result_register);
+        result_register = ExecuteGotoImpl<true, false>(self, code_item, shadow_frame, result_register);
+        self->TraceEnd(method);
+        return result_register;
       }
     }
   }
