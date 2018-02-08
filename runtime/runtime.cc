@@ -36,6 +36,7 @@
 #include <memory_representation.h>
 #include <vector>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include "JniConstants.h"
 #include "ScopedLocalRef.h"
@@ -54,6 +55,7 @@
 #include "arch/x86_64/registers_x86_64.h"
 #include "art_field-inl.h"
 #include "art_method-inl.h"
+#include "arttracing_propertywatcher.h"
 #include "asm_support.h"
 #include "atomic.h"
 #include "base/arena_allocator.h"
@@ -729,6 +731,27 @@ bool Runtime::InitZygote() {
 #endif
 }
 
+// Read a symlink's path into result.
+static void read_link(std::string& filename, std::string* result) {
+  std::vector<char> buf(KB);
+  size_t n = readlink(filename.c_str(), &buf[0], buf.size());
+  result->append(&buf[0], n);
+}
+
+// Check whether the process is an Android application. The "/proc/pid/exe" file is a symlink
+// to the binary that started the process. If it points to "/system/bin/app_process*", then
+// this is an Android app.
+static bool is_application(Thread* self) {
+  pid_t tid = self->GetTid();
+  std::string exe_path = StringPrintf("/proc/%d/exe", tid);
+
+  std::string exe;
+  read_link(exe_path, &exe);
+
+  std::string prefix = "/system/bin/app_process";
+  return exe.compare(0, prefix.length(), prefix) == 0;
+}
+
 void Runtime::InitNonZygoteOrPostFork(
     JNIEnv* env, bool is_system_server, NativeBridgeAction action, const char* isa) {
   is_zygote_ = false;
@@ -763,6 +786,11 @@ void Runtime::InitNonZygoteOrPostFork(
   }
 
   StartSignalCatcher();
+
+  Thread* main_thread = Thread::Current();
+  if (!is_system_server && is_application(main_thread)) {
+    ARTTracingPropertyWatcher::attach_to(main_thread);
+  }
 
   // Start the JDWP thread. If the command-line debugger flags specified "suspend=y",
   // this will pause the runtime, so we probably want this to come last.

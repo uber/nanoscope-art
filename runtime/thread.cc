@@ -29,6 +29,7 @@
 #include <sstream>
 #include <fstream>
 #include <stdio.h>
+#include <libgen.h>
 
 #include "arch/context.h"
 #include "art_field-inl.h"
@@ -134,6 +135,7 @@ uint64_t ALWAYS_INLINE generic_timer_frequency() {
 
 void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
   SHARED_REQUIRES(Locks::mutator_lock_) {
+  std::map<ArtMethod*, std::string> pretty_method_cache;
   std::string out_path_tmp = out_path + ".tmp";
   std::ofstream out(out_path_tmp, std::ofstream::trunc);
   int64_t* ptr = trace_data;
@@ -149,7 +151,18 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
         first_timestamp = timestamp;
       }
       timestamp = (timestamp - first_timestamp) * (seconds_to_nanoseconds / timer_frequency);
-      std::string pretty_method = method == nullptr ? "POP" : PrettyMethod(method);
+      std::string pretty_method;
+      if (method == nullptr) {
+        pretty_method = "POP";
+      } else {
+        auto it = pretty_method_cache.find(method);
+        if (it == pretty_method_cache.end()) {
+          pretty_method = PrettyMethod(method);
+          pretty_method_cache[method] = pretty_method;
+        } else {
+          pretty_method = it->second;
+        }
+      }
       out << timestamp << ":" << pretty_method << "\n";
     }
     std::rename(out_path_tmp.c_str(), out_path.c_str());
@@ -178,14 +191,38 @@ void Thread::TraceEnd(ArtMethod* method) {
 }
 
 void Thread::StartTracing() {
+  LOG(INFO) << "arttracing: Trace started.";
   tlsPtr_.trace_data = new int64_t[40000000];  // Enough room for 10M methods
   tlsPtr_.trace_data_ptr = tlsPtr_.trace_data;
 }
 
 void Thread::StopTracing(std::string out_path) {
+  if (tlsPtr_.trace_data == nullptr) {
+    return;
+  }
+
+  char* dir = dirname(strdup(out_path.c_str()));
+  std::string mkdirs = "mkdir -p " + std::string(dir);
+  system(mkdirs.c_str());
+
+  LOG(INFO) << "arttracing: Flushing trace data to: " << out_path;
+
   new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr);
   tlsPtr_.trace_data = nullptr;
   tlsPtr_.trace_data_ptr = nullptr;
+
+  // A race condition exists if we stop tracing from a different Thread. In Thread::TraceStart and Thread::TraceEnd
+  // we may end up incrementing and dereferencing trace_data_ptr after we've nulled it out above. If we hit this race
+  // condition, we'll either crash due to a nullptr dereference or increment trace_data_ptr. In the latter case,
+  // trace_data_ptr != nullptr, which allows tracing to continue. Both cases are unlikely, but we at least ensure that
+  // we don't continue tracing forever by nulling out our pointers again after 100ms.
+  //
+  // Note: We need to support this case for the system property-based API implemented in "arttracing_filewatcher.h".
+  if (Thread::Current() != this) {
+    usleep(1000 * 100);
+    tlsPtr_.trace_data = nullptr;
+    tlsPtr_.trace_data_ptr = nullptr;
+  }
 }
 
 void Thread::InitCardTable() {
