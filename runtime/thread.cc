@@ -106,14 +106,29 @@ static const char* kThreadNameDuringStartup = "<native thread without managed pe
 // Returns the Generic Timer count. This uses the same timer register used in the compiled code instrumentation.
 uint64_t ALWAYS_INLINE generic_timer_count() {
   uint64_t t = 0;
-  #if defined(__arm__)
+#if defined(__arm__)
   uint32_t t1, t2;
   asm("mrrc p15, 1, %0, %1, c14" : "=r"(t1), "=r"(t2));
   t = t2;
   t = t << 32 | t1;
-  #elif defined(__aarch64__)
+#elif defined(__aarch64__)
   asm("mrs %0, cntvct_el0" : "=r"(t));
-  #endif
+#endif
+  return t;
+}
+
+// Read the frequency of the generic timer. The register is typically only set during system boot only. So only need to check once.
+uint64_t ALWAYS_INLINE generic_timer_frequency() {
+  uint64_t t = 0;
+#if defined(__arm__)
+  uint32_t cntfrq;
+  asm volatile("mrc p15, 0, %0, c14, c0, 0" : "=r" (cntfrq));
+  t = cntfrq;
+#elif defined(__aarch64__)
+  uint64_t cntfrq_el0 = 0;
+  asm volatile("mrs %0, cntfrq_el0" : "=r" (cntfrq_el0));
+  t = cntfrq_el0;
+#endif
   return t;
 }
 
@@ -122,10 +137,18 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
   std::string out_path_tmp = out_path + ".tmp";
   std::ofstream out(out_path_tmp, std::ofstream::trunc);
   int64_t* ptr = trace_data;
+  uint64_t timer_frequency = generic_timer_frequency();
+  uint64_t seconds_to_nanoseconds = 1000000000;
+
+  uint64_t first_timestamp = 0;
   if (out.is_open()) {
     while (ptr < end) {
       ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
       int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
+      if (UNLIKELY(first_timestamp == 0)) {
+        first_timestamp = timestamp;
+      }
+      timestamp = (timestamp - first_timestamp) * (seconds_to_nanoseconds / timer_frequency);
       std::string pretty_method = method == nullptr ? "POP" : PrettyMethod(method);
       out << timestamp << ":" << pretty_method << "\n";
     }
