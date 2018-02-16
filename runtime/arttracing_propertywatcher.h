@@ -36,31 +36,6 @@
 
 namespace art {
 
-static bool starts_with(std::string str, std::string prefix) {
-  return str.compare(0, prefix.length(), prefix) == 0;
-}
-
-// We start this watcher in the Runtime::InitNonZygoteOrPostFork which is called from ZygoteHooks.postForkChild.
-// Unfortunately, the process name is set to the correct package name shortly after this hook is called. To account
-// for this, we just spin in the thread until the package name is updated.
-std::string wait_for_package_name() {
-  std::string zygote = "zygote";
-  std::string preinitialized = "<pre-initialized>";
-  std::string package_name;
-  int count = 0;
-  int limit = 100;
-  for (package_name = std::string(get_process_name());
-    starts_with(package_name, zygote) || package_name.compare(preinitialized) == 0;
-    package_name = std::string(get_process_name())) {
-    usleep(1000 * 100);  // Sleep for 100ms
-    if (count++ > limit) {
-      LOG(ERROR) << "arttracing: Could not retrieve package name.";
-      return "<unknown>";
-    }
-  }
-  return package_name;
-}
-
 // This class enables starting and stopping ART Tracing by setting the "arttracing" system property. For example, the
 // command below starts tracing the com.example process on the thread passed to ARTTracingPropertyWatcher::attach_to:
 //
@@ -73,37 +48,48 @@ std::string wait_for_package_name() {
 // It's valid to set this property before the process is started. In this case, the tracing will be triggered on app start.
 class ARTTracingPropertyWatcher {
  public:
-  static void attach_to(Thread* traced) {
-    new std::thread([traced]() {
-      std::string _package_name = wait_for_package_name();
-
-      std::string thread_name = "arttracing-propertywatcher:" + _package_name;
-      Thread* _self = Thread::Attach(thread_name.c_str(), false, nullptr, false);
-
-      ARTTracingPropertyWatcher(_self, traced, _package_name).watch();
-    });
+  static void attach(std::string package_name) {
+    Thread* traced = Thread::Current();
+    ARTTracingPropertyWatcher* watcher = new ARTTracingPropertyWatcher(traced, package_name);
+    watcher->watch();
   }
 
  private:
-  Thread* const self;
   Thread* const traced;
   const std::string package_name;
-
   const std::string watched_property = "arttracing";
   const std::string output_dir = "/data/data/" + package_name + "/files";
 
   std::string output_path;
 
-  ARTTracingPropertyWatcher(Thread* _self, Thread* _traced, std::string _package_name)
-    : self(_self), traced(_traced), package_name(_package_name) {}
+  explicit ARTTracingPropertyWatcher(Thread* _traced, std::string _package_name) : traced(_traced), package_name(_package_name) {}
 
   void watch() {
-    watch_system_property(watched_property, &ARTTracingPropertyWatcher::on_property_changed);
+    refresh_state(Thread::Current());
+    std::string thread_name = "arttracing-propertywatcher:" + package_name;
+
+    ARTTracingPropertyWatcher* watcher = this;
+    new std::thread([watcher, thread_name]() {
+      Thread* self = Thread::Attach(thread_name.c_str(), false, nullptr, false);
+#if defined(__linux__)
+      unsigned int serial = 0;
+      while (1) {
+        serial = __system_property_wait_any(serial);
+        watcher->refresh_state(self);
+      }
+#else
+      (void) self;
+#endif
+    });
   }
 
-  void on_property_changed(std::string value) {
-    if (value.empty() && !output_path.empty()) {
-      stop_tracing();
+  void refresh_state(Thread* self) {
+    std::string value = get_system_property_value();
+
+    if (value.empty()) {
+      if (output_path.empty()) return;
+
+      stop_tracing(self);
     } else {
       std::stringstream ss(value);
 
@@ -120,11 +106,19 @@ class ARTTracingPropertyWatcher {
         return;
       }
 
-      start_tracing(output_dir + "/" + output_filename);
+      start_tracing(self, output_dir + "/" + output_filename);
     }
   }
 
-  void start_tracing(std::string _output_path) {
+  std::string get_system_property_value() {
+    char* buffer = new char[1028];
+#if defined(__linux__)
+    __system_property_get(watched_property.c_str(), buffer);
+#endif
+    return std::string(buffer);
+  }
+
+  void start_tracing(Thread* self, std::string _output_path) {
     output_path = _output_path;
     remove(output_path.c_str());
 
@@ -133,7 +127,7 @@ class ARTTracingPropertyWatcher {
     Locks::mutator_lock_->SharedUnlock(self);
   }
 
-  void stop_tracing() {
+  void stop_tracing(Thread* self) {
     if (output_path.empty()) {
       LOG(ERROR) << "arttracing: No output path found.";
       return;
@@ -142,28 +136,8 @@ class ARTTracingPropertyWatcher {
     Locks::mutator_lock_->SharedLock(self);
     traced->StopTracing(output_path);
     Locks::mutator_lock_->SharedUnlock(self);
-  }
 
-  // Watch for changes to the given system property name. Call on_changed with new values.
-  std::string watch_system_property(std::string name, void (ARTTracingPropertyWatcher::*on_changed)(std::string)) {
-#if defined(__linux__)
-    std::string previous;
-    char* buffer = new char[1028];
-    unsigned int serial = 0;
-    while (1) {
-      serial = __system_property_wait_any(serial);
-      __system_property_get(name.c_str(), buffer);
-      std::string value = std::string(buffer);
-      if (value.compare(previous) != 0) {
-        (*this.*on_changed)(value);
-      }
-      previous = value;
-    }
-#else
-    (void) name;
-    (void) on_changed;
-    return "";
-#endif
+    output_path = "";
   }
 };
 

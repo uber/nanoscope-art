@@ -541,9 +541,7 @@ class Runtime {
     return is_running_on_memory_tool_;
   }
 
-  void SetTargetSdkVersion(int32_t version) {
-    target_sdk_version_ = version;
-  }
+  void SetTargetSdkVersion(int32_t version);
 
   int32_t GetTargetSdkVersion() const {
     return target_sdk_version_;

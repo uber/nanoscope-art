@@ -32,6 +32,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cutils/process_name.h>
 #include <limits>
 #include <memory_representation.h>
 #include <vector>
@@ -731,27 +732,6 @@ bool Runtime::InitZygote() {
 #endif
 }
 
-// Read a symlink's path into result.
-static void read_link(std::string& filename, std::string* result) {
-  std::vector<char> buf(KB);
-  size_t n = readlink(filename.c_str(), &buf[0], buf.size());
-  result->append(&buf[0], n);
-}
-
-// Check whether the process is an Android application. The "/proc/pid/exe" file is a symlink
-// to the binary that started the process. If it points to "/system/bin/app_process*", then
-// this is an Android app.
-static bool is_application(Thread* self) {
-  pid_t tid = self->GetTid();
-  std::string exe_path = StringPrintf("/proc/%d/exe", tid);
-
-  std::string exe;
-  read_link(exe_path, &exe);
-
-  std::string prefix = "/system/bin/app_process";
-  return exe.compare(0, prefix.length(), prefix) == 0;
-}
-
 void Runtime::InitNonZygoteOrPostFork(
     JNIEnv* env, bool is_system_server, NativeBridgeAction action, const char* isa) {
   is_zygote_ = false;
@@ -786,11 +766,6 @@ void Runtime::InitNonZygoteOrPostFork(
   }
 
   StartSignalCatcher();
-
-  Thread* main_thread = Thread::Current();
-  if (!is_system_server && is_application(main_thread)) {
-    ARTTracingPropertyWatcher::attach_to(main_thread);
-  }
 
   // Start the JDWP thread. If the command-line debugger flags specified "suspend=y",
   // this will pause the runtime, so we probably want this to come last.
@@ -2038,6 +2013,20 @@ bool Runtime::IsVerificationEnabled() const {
 
 bool Runtime::IsVerificationSoftFail() const {
   return verify_ == verifier::VerifyMode::kSoftFail;
+}
+
+void Runtime::SetTargetSdkVersion(int32_t version) {
+  target_sdk_version_ = version;
+
+  // We use Runtime::SetTargetSdkVersion as an early post-Zygote fork hook. InitNonZygoteOrPostFork would've been
+  // the obvious choice here, except that we need access to the process name AFTER it has been updated to the
+  // application package name, which happens in ZygoteConnection.handleChildProc. A search through the codebase
+  // reveals that Runtime::SetTargetSdkVersion is only executed from RuntimeInit.applicationInit so this seems like
+  // good alternative.
+  std::string package_name = std::string(get_process_name());
+  if (package_name.compare("system_server") != 0) {
+    ARTTracingPropertyWatcher::attach(package_name);
+  }
 }
 
 LinearAlloc* Runtime::CreateLinearAlloc() {
