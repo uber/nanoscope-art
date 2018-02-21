@@ -14,59 +14,21 @@
  * limitations under the License.
  */
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.util.Scanner;
-
 public class Main {
 
   public static void main(String[] args) throws Exception {
     System.loadLibrary(args[0]);
 
-    File outFile = new File("/sdcard/out.txt");
-    String startThreadName = "START_TRACING";
-    String stopThreadName = "STOP_TRACING:" + outFile.getAbsolutePath();
-
-    Thread.currentThread().setName(startThreadName);
-    test();
-    Thread.currentThread().setName(stopThreadName);
-
-    Scanner in = new Scanner(new FileInputStream(outFile)).useDelimiter("\n");
-    String indent = "  ";
-    String prefix = null;
-    while (in.hasNext()) {
-      String timestamp = in.useDelimiter(":").next().replace("\n", "");
-      String name = in.useDelimiter("\n").next().replace(":", "");
-      if (name.equals("POP")) {
-        if (prefix != null) {
-          if (prefix.isEmpty()) {
-            prefix = null;
-          } else {
-            prefix = prefix.substring(0, prefix.length() - indent.length());
-          }
-        }
-      } else {
-        if (prefix == null) {
-          prefix = "";
-        } else {
-          prefix += indent;
-        }
-        System.out.println(prefix + name);
-      }
-    }
-  }
-
-  private static void test() {
-    try {
-      $opt$throwable();
-    } catch (Throwable e) { }
-  }
-
-  private static void $opt$throwable() throws Throwable {
-    if (isInterpreted()) {
-      float a = 1 / 0;
-    }
-    throw new Throwable();
+    new Interpreter().run();
+    new Compiler().run();
+    new CompilerToInterp().run();
+    new InterpToCompiler().run();
+    new ExceptionFromCompiledToCompiled().run();
+    new ExceptionFromCompiledToInterp().run();
+    new ExceptionFromInterpToCompiled().run();
+    new ExceptionFromInterpToInterp().run();
+    new JNIToCompiled().run();
+    new JNIToInterp().run();
   }
 
   public static native boolean isInterpreted();

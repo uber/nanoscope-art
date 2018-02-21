@@ -621,6 +621,14 @@ CodeGenerator* OptimizingCompiler::TryCompile(ArenaAllocator* arena,
   CompilerDriver* compiler_driver = GetCompilerDriver();
   InstructionSet instruction_set = compiler_driver->GetInstructionSet();
 
+  if (kIsDebugBuild) {
+    std::string method_name = PrettyMethod(method_idx, dex_file);
+    bool should_interpret = method_name.find("$interp$") != std::string::npos;
+    if (should_interpret) {
+      return nullptr;
+    }
+  }
+
   // Always use the Thumb-2 assembler: some runtime functionality
   // (like implicit stack overflow checks) assume Thumb-2.
   if (instruction_set == kArm) {

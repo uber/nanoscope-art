@@ -1,10 +1,137 @@
 JNI_OnLoad called
-void Main.test()
-  void Main.$opt$throwable()
-    void java.lang.Throwable.<init>()
-      void java.lang.Object.<init>()
-      java.util.List java.util.Collections.emptyList()
-      java.lang.Throwable java.lang.Throwable.fillInStackTrace()
+
+===== Interpreter
+
+void Interpreter.test()
+  void Interpreter.$interp$a()
+    void Interpreter.$interp$b()
+    void Interpreter.$interp$c()
+      void Interpreter.$interp$d()
+void java.lang.Thread.setName(java.lang.String)
+  void java.lang.Thread.checkAccess()
+  boolean java.lang.Thread.isAlive()
+
+===== Compiler
+
+void Compiler.test()
+  void Compiler.a()
+    void Compiler.b()
+    void Compiler.c()
+      void Compiler.d()
+void java.lang.Thread.setName(java.lang.String)
+  void java.lang.Thread.checkAccess()
+  boolean java.lang.Thread.isAlive()
+
+===== CompilerToInterp
+
+void CompilerToInterp.test()
+  void CompilerToInterp.a()
+    void CompilerToInterp.$interp$b()
+void java.lang.Thread.setName(java.lang.String)
+  void java.lang.Thread.checkAccess()
+  boolean java.lang.Thread.isAlive()
+
+===== InterpToCompiler
+
+void InterpToCompiler.test()
+  void InterpToCompiler.$interp$a()
+    void InterpToCompiler.b()
+void java.lang.Thread.setName(java.lang.String)
+  void java.lang.Thread.checkAccess()
+  boolean java.lang.Thread.isAlive()
+
+===== ExceptionFromCompiledToCompiled
+
+void ExceptionFromCompiledToCompiled.test()
+  void ExceptionFromCompiledToCompiled.a()
+    void ExceptionFromCompiledToCompiled.b()
+      void ExceptionFromCompiledToCompiled.c()
+        void java.lang.Throwable.<init>()
+          void java.lang.Object.<init>()
+          java.util.List java.util.Collections.emptyList()
+          java.lang.Throwable java.lang.Throwable.fillInStackTrace()
+      void ExceptionFromCompiledToCompiled.d()
+void java.lang.Thread.setName(java.lang.String)
+  void java.lang.Thread.checkAccess()
+  boolean java.lang.Thread.isAlive()
+
+===== ExceptionFromCompiledToInterp
+
+void ExceptionFromCompiledToInterp.test()
+  void ExceptionFromCompiledToInterp.$interp$a()
+    void ExceptionFromCompiledToInterp.$interp$b()
+      void ExceptionFromCompiledToInterp.c()
+        void java.lang.Throwable.<init>()
+          void java.lang.Object.<init>()
+          java.util.List java.util.Collections.emptyList()
+          java.lang.Throwable java.lang.Throwable.fillInStackTrace()
+      void ExceptionFromCompiledToInterp.d()
+void java.lang.Thread.setName(java.lang.String)
+  void java.lang.Thread.checkAccess()
+  boolean java.lang.Thread.isAlive()
+
+===== ExceptionFromInterpToCompiled
+
+void ExceptionFromInterpToCompiled.test()
+  void ExceptionFromInterpToCompiled.a()
+    void ExceptionFromInterpToCompiled.b()
+      void ExceptionFromInterpToCompiled.$interp$c()
+        void java.lang.Throwable.<init>()
+          void java.lang.Object.<init>()
+          java.util.List java.util.Collections.emptyList()
+          java.lang.Throwable java.lang.Throwable.fillInStackTrace()
+      void ExceptionFromInterpToCompiled.d()
+void java.lang.Thread.setName(java.lang.String)
+  void java.lang.Thread.checkAccess()
+  boolean java.lang.Thread.isAlive()
+
+===== ExceptionFromInterpToInterp
+
+void ExceptionFromInterpToInterp.test()
+  void ExceptionFromInterpToInterp.$interp$a()
+    void ExceptionFromInterpToInterp.$interp$b()
+      void ExceptionFromInterpToInterp.$interp$c()
+        void java.lang.Throwable.<init>()
+          void java.lang.Object.<init>()
+          java.util.List java.util.Collections.emptyList()
+          java.lang.Throwable java.lang.Throwable.fillInStackTrace()
+      void ExceptionFromInterpToInterp.d()
+void java.lang.Thread.setName(java.lang.String)
+  void java.lang.Thread.checkAccess()
+  boolean java.lang.Thread.isAlive()
+
+===== JNIToCompiled
+
+void JNIToCompiled.test()
+  void JNIToCompiled.a()
+    void JNIToCompiled.b()
+    void JNIToCompiled.fromJNI()
+      void JNIToCompiled.c()
+        void java.lang.RuntimeException.<init>()
+          void java.lang.Exception.<init>()
+            void java.lang.Throwable.<init>()
+              void java.lang.Object.<init>()
+              java.util.List java.util.Collections.emptyList()
+              java.lang.Throwable java.lang.Throwable.fillInStackTrace()
+    void JNIToCompiled.d()
+void java.lang.Thread.setName(java.lang.String)
+  void java.lang.Thread.checkAccess()
+  boolean java.lang.Thread.isAlive()
+
+===== JNIToInterp
+
+void JNIToInterp.test()
+  void JNIToInterp.a()
+    void JNIToInterp.b()
+    void JNIToInterp.$interp$fromJNI()
+      void JNIToInterp.c()
+        void java.lang.RuntimeException.<init>()
+          void java.lang.Exception.<init>()
+            void java.lang.Throwable.<init>()
+              void java.lang.Object.<init>()
+              java.util.List java.util.Collections.emptyList()
+              java.lang.Throwable java.lang.Throwable.fillInStackTrace()
+    void JNIToInterp.d()
 void java.lang.Thread.setName(java.lang.String)
   void java.lang.Thread.checkAccess()
   boolean java.lang.Thread.isAlive()
