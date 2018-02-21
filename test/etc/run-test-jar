@@ -457,12 +457,12 @@ if [ "$HOST" = "n" ]; then
     adb root > /dev/null
     adb wait-for-device
     if [ "$QUIET" = "n" ]; then
-      adb shell rm -r $DEX_LOCATION
+      # adb shell rm -r $DEX_LOCATION
       adb shell mkdir -p $DEX_LOCATION
       adb push $TEST_NAME.jar $DEX_LOCATION
       adb push $TEST_NAME-ex.jar $DEX_LOCATION
     else
-      adb shell rm -r $DEX_LOCATION >/dev/null 2>&1
+      # adb shell rm -r $DEX_LOCATION >/dev/null 2>&1
       adb shell mkdir -p $DEX_LOCATION >/dev/null 2>&1
       adb push $TEST_NAME.jar $DEX_LOCATION >/dev/null 2>&1
       adb push $TEST_NAME-ex.jar $DEX_LOCATION >/dev/null 2>&1
@@ -493,7 +493,7 @@ if [ "$HOST" = "n" ]; then
              $strip_cmdline && \
              $dalvikvm_cmdline"
 
-    cmdfile=$(tempfile -p "cmd-" -s "-$TEST_NAME")
+    cmdfile=$(mktemp -t "cmd-$TEST_NAME-")
     echo "$cmdline" > $cmdfile
 
     if [ "$DEV_MODE" = "y" ]; then

@@ -33,7 +33,7 @@ progdir=`dirname "${prog}"`
 cd "${progdir}"
 progdir=`pwd`
 prog="${progdir}"/`basename "${prog}"`
-test_dir="test-$$"
+test_dir="test-cache"
 if [ -z "$TMPDIR" ]; then
   tmp_dir="/tmp/$USER/${test_dir}"
 else
@@ -80,7 +80,7 @@ fi
 
 # If JACK_CLASSPATH is not set, assume it only contains core-libart.
 if [ -z "$JACK_CLASSPATH" ]; then
-  export JACK_CLASSPATH="${OUT_DIR:-$ANDROID_BUILD_TOP/out}/host/common/obj/JAVA_LIBRARIES/core-libart-hostdex_intermediates/classes.jack:${OUT_DIR:-$ANDROID_BUILD_TOP/out}/host/common/obj/JAVA_LIBRARIES/core-oj-hostdex_intermediates/classes.jack"
+  export JACK_CLASSPATH="${OUT_DIR:-$ANDROID_BUILD_TOP/out}/target/common/obj/JAVA_LIBRARIES/core-libart-testdex_intermediates/classes.jack:${OUT_DIR:-$ANDROID_BUILD_TOP/out}/target/common/obj/JAVA_LIBRARIES/core-oj-testdex_intermediates/classes.jack"
 fi
 
 export JACK="$JACK -g -cp $JACK_CLASSPATH"

@@ -207,7 +207,11 @@ void Thread::StopTracing(std::string out_path) {
 
   LOG(INFO) << "arttracing: Flushing trace data to: " << out_path;
 
-  new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr);
+  if (kIsDebugBuild) {
+    flush_trace_data(out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr);
+  } else {
+    new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr);
+  }
   tlsPtr_.trace_data = nullptr;
   tlsPtr_.trace_data_ptr = nullptr;
 

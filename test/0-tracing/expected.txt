@@ -1,0 +1,10 @@
+JNI_OnLoad called
+void Main.test()
+  void Main.$opt$throwable()
+    void java.lang.Throwable.<init>()
+      void java.lang.Object.<init>()
+      java.util.List java.util.Collections.emptyList()
+      java.lang.Throwable java.lang.Throwable.fillInStackTrace()
+void java.lang.Thread.setName(java.lang.String)
+  void java.lang.Thread.checkAccess()
+  boolean java.lang.Thread.isAlive()

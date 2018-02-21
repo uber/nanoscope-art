@@ -176,7 +176,7 @@ class DebugInfoEntryWriter FINAL : private Writer<Vector> {
   void WriteStrp(Attribute attrib, const char* str, size_t len,
                  std::vector<uint8_t>* debug_str) {
     debug_abbrev_->AddAbbrevAttribute(attrib, DW_FORM_strp);
-    this->PushUint32(debug_str->size());
+    this->PushUint32(static_cast<uint32_t>(debug_str->size()));
     debug_str->insert(debug_str->end(), str, str + len);
     debug_str->push_back(0);
   }
