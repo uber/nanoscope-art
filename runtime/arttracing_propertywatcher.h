@@ -57,7 +57,8 @@ class ARTTracingPropertyWatcher {
  private:
   Thread* const traced;
   const std::string package_name;
-  const std::string watched_property = "arttracing";
+  const std::string watched_property = "dev.arttracing";
+  const std::string watched_property_alt = "arttracing";
   const std::string output_dir = "/data/data/" + package_name + "/files";
 
   std::string output_path;
@@ -113,7 +114,10 @@ class ARTTracingPropertyWatcher {
   std::string get_system_property_value() {
     char* buffer = new char[1028];
 #if defined(__linux__)
-    __system_property_get(watched_property.c_str(), buffer);
+    int length = __system_property_get(watched_property.c_str(), buffer);
+    if (length == 0) {
+      __system_property_get(watched_property_alt.c_str(), buffer);
+    }
 #endif
     return std::string(buffer);
   }
