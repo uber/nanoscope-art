@@ -59,6 +59,7 @@
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
 #include "mirror/throwable.h"
+#include "nano_tracing.h"
 #include "scoped_thread_state_change.h"
 #include "ScopedLocalRef.h"
 #include "handle_scope-inl.h"
@@ -2391,6 +2392,8 @@ class InitializeClassVisitor : public CompilationVisitor {
   explicit InitializeClassVisitor(const ParallelCompilationManager* manager) : manager_(manager) {}
 
   virtual void Visit(size_t class_def_index) REQUIRES(!Locks::mutator_lock_) OVERRIDE {
+    Thread* currentThread = Thread::Current();
+    NANO_TRACE_SCOPE_FROM_STRING(currentThread, "InitializeClassVisitor.Visit()");
     ATRACE_CALL();
     jobject jclass_loader = manager_->GetClassLoader();
     const DexFile& dex_file = *manager_->GetDexFile();
@@ -2398,7 +2401,7 @@ class InitializeClassVisitor : public CompilationVisitor {
     const DexFile::TypeId& class_type_id = dex_file.GetTypeId(class_def.class_idx_);
     const char* descriptor = dex_file.StringDataByIdx(class_type_id.descriptor_idx_);
 
-    ScopedObjectAccess soa(Thread::Current());
+    ScopedObjectAccess soa(currentThread);
     StackHandleScope<3> hs(soa.Self());
     Handle<mirror::ClassLoader> class_loader(
         hs.NewHandle(soa.Decode<mirror::ClassLoader*>(jclass_loader)));
@@ -2724,6 +2727,7 @@ void CompilerDriver::CompileDexFile(jobject class_loader,
                                     ThreadPool* thread_pool,
                                     size_t thread_count,
                                     TimingLogger* timings) {
+  NANO_TRACE_SCOPE_FROM_STRING(Thread::Current(), "CompilerDriver.CompileDexFile()");
   TimingLogger::ScopedTiming t("Compile Dex File", timings);
   ParallelCompilationManager context(Runtime::Current()->GetClassLinker(), class_loader, this,
                                      &dex_file, dex_files, thread_pool);

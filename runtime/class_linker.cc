@@ -76,6 +76,7 @@
 #include "mirror/reference-inl.h"
 #include "mirror/stack_trace_element.h"
 #include "mirror/string-inl.h"
+#include "nano_tracing.h"
 #include "native/dalvik_system_DexFile.h"
 #include "oat.h"
 #include "oat_file.h"
@@ -2467,6 +2468,7 @@ mirror::Class* ClassLinker::DefineClass(Thread* self,
                                         const DexFile& dex_file,
                                         const DexFile::ClassDef& dex_class_def) {
   StackHandleScope<3> hs(self);
+  NANO_TRACE_SCOPE_FROM_STRING_AND_META(self, "Class ClassLinker.DefineClass()", descriptor);
   auto klass = hs.NewHandle<mirror::Class>(nullptr);
 
   // Load the class from the dex file.
@@ -2955,6 +2957,7 @@ void ClassLinker::LoadClass(Thread* self,
                             const DexFile& dex_file,
                             const DexFile::ClassDef& dex_class_def,
                             Handle<mirror::Class> klass) {
+  NANO_TRACE_SCOPE_FROM_STRING(self, "bool ClassLinker.LoadClass()");
   const uint8_t* class_data = dex_file.GetClassData(dex_class_def);
   if (class_data == nullptr) {
     return;  // no fields or methods - for example a marker interface
@@ -3844,6 +3847,7 @@ bool ClassLinker::AttemptSupertypeVerification(Thread* self,
 }
 
 void ClassLinker::VerifyClass(Thread* self, Handle<mirror::Class> klass, LogSeverity log_level) {
+  NANO_TRACE_SCOPE_FROM_STRING(self, "void ClassLinker.VerifyClass()");
   {
     // TODO: assert that the monitor on the Class is held
     ObjectLock<mirror::Class> lock(self, klass);
@@ -4479,6 +4483,8 @@ bool ClassLinker::InitializeClass(Thread* self, Handle<mirror::Class> klass,
     return true;
   }
 
+  NANO_TRACE_SCOPE_FROM_STRING(self, "bool ClassLinker.InitializeClass()");
+
   // Fast fail if initialization requires a full runtime. Not part of the JLS.
   if (!CanWeInitializeClass(klass.Get(), can_init_statics, can_init_parents)) {
     return false;
@@ -5111,8 +5117,8 @@ bool ClassLinker::LinkClass(Thread* self,
                             Handle<mirror::Class> klass,
                             Handle<mirror::ObjectArray<mirror::Class>> interfaces,
                             MutableHandle<mirror::Class>* h_new_class_out) {
+  NANO_TRACE_SCOPE_FROM_STRING(self, "bool ClassLinker.LinkClass()");
   CHECK_EQ(mirror::Class::kStatusLoaded, klass->GetStatus());
-
   if (!LinkSuperClass(klass)) {
     return false;
   }
@@ -5132,7 +5138,6 @@ bool ClassLinker::LinkClass(Thread* self,
   }
   CreateReferenceInstanceOffsets(klass);
   CHECK_EQ(mirror::Class::kStatusLoaded, klass->GetStatus());
-
   ImTable* imt = nullptr;
   if (klass->ShouldHaveImt()) {
     // If there are any new conflicts compared to the super class we can not make a copy. There

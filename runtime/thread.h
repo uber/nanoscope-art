@@ -156,6 +156,21 @@ class Thread {
   // Called from the interpreter to log the end of a method.
   ALWAYS_INLINE void TraceEnd(ArtMethod* method);
 
+  // Start a trace by copying string ptr into buffer. Using this method requires
+  // an extra bit to be written into the buffer as a delimiter. However, it is still
+  // significantly faster than atrace since it doesn't copy the entire function name
+  // until later. (see atrace https://android.googlesource.com/platform/system/core/+/2d3150e%5E!/)
+  ALWAYS_INLINE void TraceStart(const char *name);
+  ALWAYS_INLINE void TraceStart(const char *name, const char *metadata);
+
+  // Called from the interpreter to log the start of a method. This version of TraceStart requires
+  // a few less C instructions to execute than the string version. However, it is more cumbersome.
+  // It is left here only as a reminder.
+  ALWAYS_INLINE void TraceStart(int64_t identifier);
+
+  // Called from the interpreter to log the end of a method.
+  ALWAYS_INLINE void TraceEnd();
+
   // Enables tracing on this Thread.
   void StartTracing() SHARED_REQUIRES(Locks::mutator_lock_);
 

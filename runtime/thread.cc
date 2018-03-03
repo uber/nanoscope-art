@@ -146,14 +146,15 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
   if (out.is_open()) {
     while (ptr < end) {
       ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
-      int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
-      if (UNLIKELY(first_timestamp == 0)) {
-        first_timestamp = timestamp;
-      }
-      timestamp = (timestamp - first_timestamp) * (seconds_to_nanoseconds / timer_frequency);
       std::string pretty_method;
       if (method == nullptr) {
         pretty_method = "POP";
+      } else if (UNLIKELY(reinterpret_cast<int64_t>(method) == 100)) {
+        pretty_method = reinterpret_cast<const char*>(*ptr++);
+      } else if (UNLIKELY(reinterpret_cast<int64_t>(method) == 101)) {
+        std::string a = std::string(reinterpret_cast<const char*>(*ptr++));
+        std::string b = std::string(reinterpret_cast<const char*>(*ptr++));
+        pretty_method = a + "#" + b;
       } else {
         auto it = pretty_method_cache.find(method);
         if (it == pretty_method_cache.end()) {
@@ -163,6 +164,11 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
           pretty_method = it->second;
         }
       }
+      int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
+      if (UNLIKELY(first_timestamp == 0)) {
+        first_timestamp = timestamp;
+      }
+      timestamp = (timestamp - first_timestamp) * (seconds_to_nanoseconds / timer_frequency);
       out << timestamp << ":" << pretty_method << "\n";
     }
     std::rename(out_path_tmp.c_str(), out_path.c_str());
@@ -187,6 +193,37 @@ void Thread::TraceEnd(ArtMethod* method) {
       *tlsPtr_.trace_data_ptr++ = 0;
       *tlsPtr_.trace_data_ptr++ = generic_timer_count();
     }
+  }
+}
+
+void Thread::TraceStart(int64_t a) {
+  if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {  // Only trace if we're on the correct Thread. Use compiler hint to favor the performance of the traced Thread.
+    *tlsPtr_.trace_data_ptr++ = a;
+    *tlsPtr_.trace_data_ptr++ = generic_timer_count();
+  }
+}
+
+void Thread::TraceStart(const char *name, const char *metadata) {
+  if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {  // Only trace if we're on the correct Thread. Use compiler hint to favor the performance of the traced Thread.
+    *tlsPtr_.trace_data_ptr++ = 101;
+    *tlsPtr_.trace_data_ptr++ = reinterpret_cast<int64_t>(name);
+    *tlsPtr_.trace_data_ptr++ = reinterpret_cast<int64_t>(metadata);
+    *tlsPtr_.trace_data_ptr++ = generic_timer_count();
+  }
+}
+
+void Thread::TraceStart(const char *name) {
+  if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {  // Only trace if we're on the correct Thread. Use compiler hint to favor the performance of the traced Thread.
+    *tlsPtr_.trace_data_ptr++ = 100;
+    *tlsPtr_.trace_data_ptr++ = reinterpret_cast<int64_t>(name);
+    *tlsPtr_.trace_data_ptr++ = generic_timer_count();
+  }
+}
+
+void Thread::TraceEnd() {
+  if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {
+    *tlsPtr_.trace_data_ptr++ = 0;
+    *tlsPtr_.trace_data_ptr++ = generic_timer_count();
   }
 }
 

@@ -249,6 +249,7 @@ static jboolean DexFile_closeDexFile(JNIEnv* env, jclass, jobject cookie) {
   return all_deleted ? JNI_TRUE : JNI_FALSE;
 }
 
+// Change this?
 static jclass DexFile_defineClassNative(JNIEnv* env,
                                         jclass,
                                         jstring javaName,
