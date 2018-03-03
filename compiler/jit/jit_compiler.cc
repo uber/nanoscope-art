@@ -33,6 +33,7 @@
 #include "oat_quick_method_header.h"
 #include "object_lock.h"
 #include "thread_list.h"
+#include "../../runtime/nano_tracing.h"
 
 namespace art {
 namespace jit {
@@ -200,6 +201,7 @@ JitCompiler::~JitCompiler() {
 }
 
 bool JitCompiler::CompileMethod(Thread* self, ArtMethod* method, bool osr) {
+  NANO_TRACE_SCOPE_FROM_STRING(self, "JitCompiler.CompileMethod()");
   DCHECK(!method->IsProxyMethod());
   TimingLogger logger("JIT compiler timing logger", true, VLOG_IS_ON(jit));
   StackHandleScope<2> hs(self);
