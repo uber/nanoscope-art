@@ -3,7 +3,7 @@
 # Tests building and installing a NanoTracer release.
 
 function clean() {
-	rm -f nanotracer.zip
+	rm -f nanotracer-test.zip
 	rm -rf tmp
 }
 
@@ -11,9 +11,9 @@ set -e
 
 clean
 
-./make-release.sh
+./make-release.sh test
 
-unzip nanotracer.zip -d tmp
+unzip nanotracer-test.zip -d tmp
 
 ./tmp/install.sh
 
