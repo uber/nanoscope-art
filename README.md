@@ -11,5 +11,5 @@ NanoTracer is custom Android ROM that allows tracing of EVERY method in ANY Andr
 * ADB-connected device
 
 ### Install / Update
-1. Download and unzip the latest NanoTracer ROM.
+1. Download and unzip the latest [NanoTracer release](https://github.com/uber/nanotracer-art/releases/).
 2. Run the `install.sh` script.
