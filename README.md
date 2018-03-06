@@ -1,15 +1,3 @@
-# NanoTracer
-NanoTracer is custom Android ROM that allows tracing of EVERY method in ANY Android app with extremely low overhead.
+This is the AOSP fork component of [NanoScope](https://github.com/uber/nanoscope).
 
-## Installation
-*IMPORTANT: Only proceed if you are fine with deleting all device data.*
-
-### Prerequisites
-* `Nexus 6p` is currently the only supported device model.
-* OEM Unlocking Enabled
-	* `(Settings -> Developer Options -> OEM unlocking)`
-* ADB-connected device
-
-### Install / Update
-1. Download and unzip the latest [NanoTracer release](https://github.com/uber/nanotracer-art/releases/).
-2. Run the `install.sh` script.
+See the NanoScope [wiki](https://github.com/uber/nanoscope/wiki) for more details.
