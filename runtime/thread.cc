@@ -109,7 +109,7 @@ uint64_t ALWAYS_INLINE generic_timer_count() {
   uint64_t t = 0;
 #if defined(__arm__)
   uint32_t t1, t2;
-  asm("mrrc p15, 1, %0, %1, c14" : "=r"(t1), "=r"(t2));
+  asm volatile("mrrc p15, 1, %0, %1, c14" : "=r"(t1), "=r"(t2));
   t = t2;
   t = t << 32 | t1;
 #elif defined(__aarch64__)
