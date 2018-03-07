@@ -33,7 +33,7 @@
 #include "oat_quick_method_header.h"
 #include "object_lock.h"
 #include "thread_list.h"
-#include "../../runtime/nano_tracing.h"
+#include "../../runtime/nanoscope.h"
 
 namespace art {
 namespace jit {

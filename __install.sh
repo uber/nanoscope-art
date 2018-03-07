@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-# Flashes NanoTracer ROM onto adb-connected device.
+# Flashes Nanoscope ROM onto adb-connected device.
 
 WORK_DIR=$(dirname "$0")
-CONFIG_DIR=$HOME/.nanotracer
+CONFIG_DIR=$HOME/.nanoscope
 GAPPS_ARCH=arm64
 GAPPS_DATE=20180303
 GAPPS_API_VERSION=7.1

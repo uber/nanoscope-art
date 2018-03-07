@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_RUNTIME_NANO_TRACING_H_
-#define ART_RUNTIME_NANO_TRACING_H_
+#ifndef ART_RUNTIME_NANOSCOPE_H_
+#define ART_RUNTIME_NANOSCOPE_H_
 
 #include "thread.h"
 
@@ -52,4 +52,4 @@ class FromStringAndMetaScopedArtTrace {
   }
 };
 
-#endif  // ART_RUNTIME_NANO_TRACING_H_
+#endif  // ART_RUNTIME_NANOSCOPE_H_

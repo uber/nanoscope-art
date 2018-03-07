@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-# Tests building and installing a NanoTracer release.
+# Tests building and installing a Nanoscope release.
 
 function clean() {
-	rm -f nanotracer-test.zip
+	rm -f nanoscope-rom-test.zip
 	rm -rf tmp
 }
 
@@ -13,7 +13,7 @@ clean
 
 ./make-release.sh test
 
-unzip nanotracer-test.zip -d tmp
+unzip nanoscope-rom-test.zip -d tmp
 
 ./tmp/install.sh
 

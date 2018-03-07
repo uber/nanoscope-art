@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Builds a NanoTracer release zip.
+# Builds a Nanoscope ROM release zip.
 # usage: make-release.sh 0.0.1
 
 VERSION=$1
@@ -22,4 +22,4 @@ done
 
 cp $INSTALL_SCRIPT $ANDROID_PRODUCT_OUT/install.sh
 chmod +x $ANDROID_PRODUCT_OUT/install.sh
-zip -j nanotracer-$VERSION.zip ${RELEASE_FILES[@]}
+zip -j nanoscope-rom-$VERSION.zip ${RELEASE_FILES[@]}

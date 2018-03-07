@@ -76,7 +76,7 @@
 #include "mirror/reference-inl.h"
 #include "mirror/stack_trace_element.h"
 #include "mirror/string-inl.h"
-#include "nano_tracing.h"
+#include "nanoscope.h"
 #include "native/dalvik_system_DexFile.h"
 #include "oat.h"
 #include "oat_file.h"

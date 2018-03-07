@@ -228,7 +228,7 @@ void Thread::TraceEnd() {
 }
 
 void Thread::StartTracing() {
-  LOG(INFO) << "arttracing: Trace started.";
+  LOG(INFO) << "nanoscope: Trace started.";
   tlsPtr_.trace_data = new int64_t[40000000];  // Enough room for 10M methods
   tlsPtr_.trace_data_ptr = tlsPtr_.trace_data;
 }
@@ -242,7 +242,7 @@ void Thread::StopTracing(std::string out_path) {
   std::string mkdirs = "mkdir -p " + std::string(dir);
   system(mkdirs.c_str());
 
-  LOG(INFO) << "arttracing: Flushing trace data to: " << out_path;
+  LOG(INFO) << "nanoscope: Flushing trace data to: " << out_path;
 
   if (kIsDebugBuild) {
     flush_trace_data(out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr);
@@ -258,7 +258,7 @@ void Thread::StopTracing(std::string out_path) {
   // trace_data_ptr != nullptr, which allows tracing to continue. Both cases are unlikely, but we at least ensure that
   // we don't continue tracing forever by nulling out our pointers again after 100ms.
   //
-  // Note: We need to support this case for the system property-based API implemented in "arttracing_filewatcher.h".
+  // Note: We need to support this case for the system property-based API implemented in "nanoscope_propertywatcher.h".
   if (Thread::Current() != this) {
     usleep(1000 * 100);
     tlsPtr_.trace_data = nullptr;

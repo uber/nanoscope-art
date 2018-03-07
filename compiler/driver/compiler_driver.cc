@@ -59,7 +59,7 @@
 #include "mirror/object-inl.h"
 #include "mirror/object_array-inl.h"
 #include "mirror/throwable.h"
-#include "nano_tracing.h"
+#include "nanoscope.h"
 #include "scoped_thread_state_change.h"
 #include "ScopedLocalRef.h"
 #include "handle_scope-inl.h"

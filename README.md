@@ -1,3 +1,3 @@
-This is the AOSP fork component of [NanoScope](https://github.com/uber/nanoscope).
+This is the AOSP fork component of [Nanoscope](https://github.com/uber/nanoscope).
 
-See the NanoScope [wiki](https://github.com/uber/nanoscope/wiki) for more details.
+See the Nanoscope [wiki](https://github.com/uber/nanoscope/wiki) for more details.
