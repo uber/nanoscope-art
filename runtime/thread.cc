@@ -113,7 +113,7 @@ uint64_t ALWAYS_INLINE generic_timer_count() {
   t = t2;
   t = t << 32 | t1;
 #elif defined(__aarch64__)
-  asm("mrs %0, cntvct_el0" : "=r"(t));
+  asm volatile("mrs %0, cntvct_el0" : "=r"(t));
 #endif
   return t;
 }
