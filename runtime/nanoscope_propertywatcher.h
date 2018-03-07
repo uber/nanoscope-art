@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ART_RUNTIME_ARTTRACING_PROPERTYWATCHER_H_
-#define ART_RUNTIME_ARTTRACING_PROPERTYWATCHER_H_
+#ifndef ART_RUNTIME_NANOSCOPE_PROPERTYWATCHER_H_
+#define ART_RUNTIME_NANOSCOPE_PROPERTYWATCHER_H_
 
 #include "base/mutex.h"
 #include "thread.h"
@@ -36,40 +36,39 @@
 
 namespace art {
 
-// This class enables starting and stopping ART Tracing by setting the "arttracing" system property. For example, the
-// command below starts tracing the com.example process on the thread passed to ARTTracingPropertyWatcher::attach_to:
+// This class enables starting and stopping tracing by setting the "dev.nanoscope" system property. For example, the
+// command below starts tracing the com.example process on the thread passed to NanoScopePropertyWatcher::attach_to:
 //
-//     $ adb shell setprop arttracing com.example:data.txt
+//     $ adb shell setprop dev.nanoscope com.example:data.txt
 //
 // The following command stops tracing and flushes the trace data to /data/data/com.example/files/data.txt:
 //
-//     $ adb shell setprop arttracing \'\'
+//     $ adb shell setprop dev.nanoscope \'\'
 //
 // It's valid to set this property before the process is started. In this case, the tracing will be triggered on app start.
-class ARTTracingPropertyWatcher {
+class NanoscopePropertyWatcher {
  public:
   static void attach(std::string package_name) {
     Thread* traced = Thread::Current();
-    ARTTracingPropertyWatcher* watcher = new ARTTracingPropertyWatcher(traced, package_name);
+    NanoscopePropertyWatcher* watcher = new NanoscopePropertyWatcher(traced, package_name);
     watcher->watch();
   }
 
  private:
   Thread* const traced;
   const std::string package_name;
-  const std::string watched_property = "dev.arttracing";
-  const std::string watched_property_alt = "arttracing";
+  const std::string watched_properties[3] = {"dev.nanoscope", "dev.arttracing", "arttracing"};
   const std::string output_dir = "/data/data/" + package_name + "/files";
 
   std::string output_path;
 
-  explicit ARTTracingPropertyWatcher(Thread* _traced, std::string _package_name) : traced(_traced), package_name(_package_name) {}
+  explicit NanoscopePropertyWatcher(Thread* _traced, std::string _package_name) : traced(_traced), package_name(_package_name) {}
 
   void watch() {
     refresh_state(Thread::Current());
-    std::string thread_name = "arttracing-propertywatcher:" + package_name;
+    std::string thread_name = "nanoscope-propertywatcher:" + package_name;
 
-    ARTTracingPropertyWatcher* watcher = this;
+    NanoscopePropertyWatcher* watcher = this;
     new std::thread([watcher, thread_name]() {
       Thread* self = Thread::Attach(thread_name.c_str(), false, nullptr, false);
 #if defined(__linux__)
@@ -103,7 +102,7 @@ class ARTTracingPropertyWatcher {
       std::string output_filename;
       std::getline(ss, output_filename);
       if (output_filename.empty()) {
-        LOG(INFO) << "arttracing: Failed to parse output filename: " << value;
+        LOG(INFO) << "nanoscope: Failed to parse output filename: " << value;
         return;
       }
 
@@ -114,9 +113,9 @@ class ARTTracingPropertyWatcher {
   std::string get_system_property_value() {
     char* buffer = new char[1028];
 #if defined(__linux__)
-    int length = __system_property_get(watched_property.c_str(), buffer);
-    if (length == 0) {
-      __system_property_get(watched_property_alt.c_str(), buffer);
+    for (std::string watched_property : watched_properties) {
+      int length = __system_property_get(watched_property.c_str(), buffer);
+      if (length > 0) break;
     }
 #endif
     return std::string(buffer);
@@ -133,7 +132,7 @@ class ARTTracingPropertyWatcher {
 
   void stop_tracing(Thread* self) {
     if (output_path.empty()) {
-      LOG(ERROR) << "arttracing: No output path found.";
+      LOG(ERROR) << "nanoscope: No output path found.";
       return;
     }
 
@@ -147,4 +146,4 @@ class ARTTracingPropertyWatcher {
 
 }  // namespace art
 
-#endif  // ART_RUNTIME_ARTTRACING_PROPERTYWATCHER_H_
+#endif  // ART_RUNTIME_NANOSCOPE_PROPERTYWATCHER_H_

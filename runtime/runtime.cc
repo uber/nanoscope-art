@@ -56,7 +56,7 @@
 #include "arch/x86_64/registers_x86_64.h"
 #include "art_field-inl.h"
 #include "art_method-inl.h"
-#include "arttracing_propertywatcher.h"
+#include "nanoscope_propertywatcher.h"
 #include "asm_support.h"
 #include "atomic.h"
 #include "base/arena_allocator.h"
@@ -2025,7 +2025,7 @@ void Runtime::SetTargetSdkVersion(int32_t version) {
   // good alternative.
   std::string package_name = std::string(get_process_name());
   if (package_name.compare("system_server") != 0) {
-    ARTTracingPropertyWatcher::attach(package_name);
+    NanoscopePropertyWatcher::attach(package_name);
   }
 }
 
