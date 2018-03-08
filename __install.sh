@@ -4,13 +4,6 @@
 
 WORK_DIR=$(dirname "$0")
 CONFIG_DIR=$HOME/.nanoscope
-GAPPS_ARCH=arm64
-GAPPS_DATE=20180303
-GAPPS_API_VERSION=7.1
-GAPPS_VARIANT=pico
-GAPPS_VERSION="open_gapps-$GAPPS_ARCH-$GAPPS_API_VERSION-$GAPPS_VARIANT-$GAPPS_DATE"
-GAPPS_URL="https://github.com/opengapps/$GAPPS_ARCH/releases/download/$GAPPS_DATE/$GAPPS_VERSION.zip"
-GAPPS_FILE=$CONFIG_DIR/$GAPPS_VERSION.zip
 
 function ensure_config_dir() {
 	mkdir -p $CONFIG_DIR
@@ -76,44 +69,7 @@ function flash() {
 	ANDROID_PRODUCT_OUT=$WORK_DIR fastboot flashall
 }
 
-function disable_verity() {
-	set -e
-	ensure_root
-	adb disable-verity
-}
-
-function ensure_gapps_downloaded() {
-	set -e
-	ensure_config_dir
-	if [ ! -f $GAPPS_FILE ]; then
-		wget -O $GAPPS_FILE $GAPPS_URL
-	fi
-}
-
-function install_gapps() {
-	set -e
-	disable_verity
-	if [ -z "$(adb shell pm path com.google.android.gms)" ]; then
-		ensure_root
-		adb reboot sideload
-		adb kill-server
-		adb wait-for-sideload
-		adb sideload $GAPPS_FILE
-		sleep 5
-		adb reboot
-		wait_for_boot
-		adb root
-		adb shell pm grant com.google.android.gms android.permission.ACCESS_FINE_LOCATION
-	fi
-}
-
 set -o xtrace
 set -e
 
-ensure_gapps_downloaded &
-DOWNLOAD_PID=$!
-
 flash
-wait_for_boot
-wait $DOWNLOAD_PID
-install_gapps
