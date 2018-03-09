@@ -824,6 +824,21 @@ const char* Class::GetDescriptor(std::string* storage) {
   }
 }
 
+const char* Class::GetDescriptorAssumingDex(std::string* storage) {
+  if (UNLIKELY(IsPrimitive())) {
+    return Primitive::Descriptor(GetPrimitiveType());
+  } else if (UNLIKELY(IsArrayClass())) {
+    return GetArrayDescriptor(storage);
+  } else if (UNLIKELY(IsProxyClass())) {
+    *storage = Runtime::Current()->GetClassLinker()->GetDescriptorForProxy(this);
+    return storage->c_str();
+  } else {
+    const DexFile& dex_file = GetDexFile();
+    const DexFile::TypeId& type_id = dex_file.GetTypeId(GetClassDef()->class_idx_);
+    return dex_file.GetTypeDescriptor(type_id);
+  }
+}
+
 const char* Class::GetArrayDescriptor(std::string* storage) {
   std::string temp;
   const char* elem_desc = GetComponentType()->GetDescriptor(&temp);

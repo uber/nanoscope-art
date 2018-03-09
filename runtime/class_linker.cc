@@ -752,6 +752,7 @@ void ClassLinker::FinishInit(Thread* self) {
 
 void ClassLinker::RunRootClinits() {
   Thread* self = Thread::Current();
+  NANO_TRACE_SCOPE_FROM_STRING(self, "void ClassLinker.RunRootClinits()");
   for (size_t i = 0; i < ClassLinker::kClassRootsMax; ++i) {
     mirror::Class* c = GetClassRoot(ClassRoot(i));
     if (!c->IsArrayClass() && !c->IsPrimitive()) {
@@ -2468,7 +2469,7 @@ mirror::Class* ClassLinker::DefineClass(Thread* self,
                                         const DexFile& dex_file,
                                         const DexFile::ClassDef& dex_class_def) {
   StackHandleScope<3> hs(self);
-  NANO_TRACE_SCOPE_FROM_STRING_AND_META(self, "Class ClassLinker.DefineClass()", descriptor);
+  NANO_TRACE_SCOPE_FROM_STRING(self, "Class ClassLinker.DefineClass()");
   auto klass = hs.NewHandle<mirror::Class>(nullptr);
 
   // Load the class from the dex file.
@@ -2957,7 +2958,12 @@ void ClassLinker::LoadClass(Thread* self,
                             const DexFile& dex_file,
                             const DexFile::ClassDef& dex_class_def,
                             Handle<mirror::Class> klass) {
-  NANO_TRACE_SCOPE_FROM_STRING(self, "bool ClassLinker.LoadClass()");
+  std::string tempStorage;
+  const char* descriptor = klass.Get()->GetDescriptorAssumingDex(&tempStorage);
+  // This loading operation should only ever be called on classes whose descriptor's can
+  // be directly pulled from the dex. So no need for additional storage.
+  CHECK(tempStorage.empty()) << "Check failed for " << tempStorage;
+  NANO_TRACE_SCOPE_FROM_STRING_AND_META(self, "bool ClassLinker.LoadClass()", descriptor);
   const uint8_t* class_data = dex_file.GetClassData(dex_class_def);
   if (class_data == nullptr) {
     return;  // no fields or methods - for example a marker interface
@@ -4483,7 +4489,12 @@ bool ClassLinker::InitializeClass(Thread* self, Handle<mirror::Class> klass,
     return true;
   }
 
-  NANO_TRACE_SCOPE_FROM_STRING(self, "bool ClassLinker.InitializeClass()");
+  std::string tempStorage;
+  const char* descriptorCString = klass.Get()->GetDescriptorAssumingDex(&tempStorage);
+  // We should never be asked to initialize a class whose descriptor isn't from the dex file. So their
+  // should be no need to ever allocate extra storage space for the descriptor.
+  CHECK(tempStorage.empty()) << "Check failed for " << descriptorCString;
+  NANO_TRACE_SCOPE_FROM_STRING_AND_META(self, "bool ClassLinker.InitializeClass()", descriptorCString);
 
   // Fast fail if initialization requires a full runtime. Not part of the JLS.
   if (!CanWeInitializeClass(klass.Get(), can_init_statics, can_init_parents)) {
@@ -5117,7 +5128,17 @@ bool ClassLinker::LinkClass(Thread* self,
                             Handle<mirror::Class> klass,
                             Handle<mirror::ObjectArray<mirror::Class>> interfaces,
                             MutableHandle<mirror::Class>* h_new_class_out) {
-  NANO_TRACE_SCOPE_FROM_STRING(self, "bool ClassLinker.LinkClass()");
+  std::string tempStorage;
+  const char* descriptorCString = klass.Get()->GetDescriptorAssumingDex(&tempStorage);
+  if (UNLIKELY(!tempStorage.empty())) {
+    // If the tempStorage was filled then it means that we weren't able to directly pull the descriptor
+    // from the dex file. This means we need to make a copy of the string in order to keep it for later.
+    // When tested on an application's start sequence, we only saw this happen in 3% of cases.
+    char* tmp = new char[tempStorage.length()+1];
+    std::strcpy(tmp, tempStorage.c_str());
+    descriptorCString = tmp;
+  }
+  NANO_TRACE_SCOPE_FROM_STRING_AND_META(self, "bool ClassLinker.LinkClass()", descriptorCString);
   CHECK_EQ(mirror::Class::kStatusLoaded, klass->GetStatus());
   if (!LinkSuperClass(klass)) {
     return false;
