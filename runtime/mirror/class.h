@@ -1163,6 +1163,7 @@ class MANAGED Class FINAL : public Object {
   // always create one the storage argument is populated and its internal c_str() returned. We do
   // this to avoid memory allocation in the common case.
   const char* GetDescriptor(std::string* storage) SHARED_REQUIRES(Locks::mutator_lock_);
+  const char* GetDescriptorAssumingDex(std::string* storage) SHARED_REQUIRES(Locks::mutator_lock_);
 
   const char* GetArrayDescriptor(std::string* storage) SHARED_REQUIRES(Locks::mutator_lock_);
 

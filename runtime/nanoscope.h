@@ -20,7 +20,7 @@
 #include "thread.h"
 
 #define NANO_TRACE_SCOPE_FROM_STRING(thread_self, name_string) FromStringScopedArtTrace ___nano_tracer(thread_self, reinterpret_cast<const char *>(name_string))
-#define NANO_TRACE_SCOPE_FROM_STRING_AND_META(thread_self, name_string, meta) FromStringAndMetaScopedArtTrace ___nano_tracer(thread_self, reinterpret_cast<const char *>(name_string), reinterpret_cast<const char *>(meta))
+#define NANO_TRACE_SCOPE_FROM_STRING_AND_META(thread_self, name_string, meta) FromStringAndMetaScopedArtTrace ___nano_tracer_with_meta(thread_self, reinterpret_cast<const char *>(name_string), reinterpret_cast<const char *>(meta))
 
 class FromStringScopedArtTrace {
  private:
