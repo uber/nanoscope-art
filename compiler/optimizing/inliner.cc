@@ -42,8 +42,13 @@
 #include "ssa_phi_elimination.h"
 #include "scoped_thread_state_change.h"
 #include "thread.h"
+#include "nanoscope_propertywatcher.h"
 
 namespace art {
+
+#if defined(__arm__)  // Work around a compilation issue.
+static bool ranHackForFirstTime = false;
+#endif
 
 static constexpr size_t kMaximumNumberOfHInstructions = 32;
 
@@ -54,7 +59,27 @@ static constexpr size_t kMaximumNumberOfCumulatedDexRegisters = 64;
 // Avoid inlining within a huge method due to memory pressure.
 static constexpr size_t kMaximumCodeUnitSize = 4096;
 
+bool should_disable_inlining() {
+    bool shouldDisableInlining = false;
+#if defined(__linux__)
+    char* buffer = new char[1028];
+    int length = __system_property_get("dev.nanoscope", buffer);
+    shouldDisableInlining = length > 0;
+#endif
+    return shouldDisableInlining;
+}
+
 void HInliner::Run() {
+#if defined(__arm__)
+  if (std::string(get_process_name()).find("uber") != std::string::npos) {
+    // We can't rely on NanoscopePropertyWatcher since the optimizing compiler starts before the propertywatcher begins.
+    // So we'll just copy analyze the properties ourselves.
+    if (!ranHackForFirstTime) {
+      ranHackForFirstTime = true;
+      LOG(WARNING) << "MOO: Disabled inlining of all methods? " << should_disable_inlining() << " process=" << get_process_name();
+    }
+  }
+#endif
   const CompilerOptions& compiler_options = compiler_driver_->GetCompilerOptions();
   if ((compiler_options.GetInlineDepthLimit() == 0)
       || (compiler_options.GetInlineMaxCodeUnits() == 0)) {
@@ -63,7 +88,7 @@ void HInliner::Run() {
   if (caller_compilation_unit_.GetCodeItem()->insns_size_in_code_units_ > kMaximumCodeUnitSize) {
     return;
   }
-  if (graph_->IsDebuggable() ||  /* DISABLES CODE */ (true)) {
+  if (graph_->IsDebuggable() ||  /* DISABLES CODE */ (wouldHaveEnabledTracing)) {
     // For simplicity, we currently never inline when the graph is debuggable. This avoids
     // doing some logic in the runtime to discover if a method could have been inlined.
     return;
