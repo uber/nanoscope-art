@@ -566,3 +566,32 @@ include $(art_path)/runtime/openjdkjvm/Android.mk
 #   m art-boot-image ART_BOOT_IMAGE_EXTRA_ARGS=--dump-init-failures=fails.txt
 .PHONY: art-boot-image
 art-boot-image: $(DEFAULT_DEX_PREOPT_BUILT_IMAGE_FILENAME)
+
+TEST_ART_RUN_TEST_DEPENDENCIES := \
+  $(DX) \
+  $(HOST_OUT_EXECUTABLES)/jasmin \
+  $(HOST_OUT_EXECUTABLES)/smali \
+  $(HOST_OUT_EXECUTABLES)/dexmerger \
+  $(JACK)
+
+art_run_tests_dir := $(call intermediates-dir-for,PACKAGING,art-run-tests)/DATA
+nanoscope_test := 0-tracing
+nanoscope_test_dir := $(art_run_tests_dir)/art-run-tests/$(nanoscope_test)
+
+# Run integration tests for nanoscope. It seems like the following would be more appropriate than defining a new target:
+#     $ mma test-art-target-run-test-debug-prebuild-optimizing-relocate-ntrace-cms-checkjni-image-npictest-ndebuggable-0-tracing32
+# However, the above command fails with an error similar to the one mentioned here:
+#     https://groups.google.com/forum/#!topic/android-building/Z-YVTiqBSDQ
+# Most of the logic below is copied from define-build-art-run-test in Android.run-test.mk
+.PHONY: run-nanoscope-tests
+run-nanoscope-tests: $(TEST_ART_RUN_TEST_DEPENDENCIES) $(TARGET_JACK_CLASSPATH_DEPENDENCIES) | setup-jack-server
+	$(hide) adb root
+	$(hide) rm -rf $(nanoscope_test_dir) && mkdir -p $(nanoscope_test_dir)
+	$(hide) DX=$(abspath $(DX)) JASMIN=$(abspath $(HOST_OUT_EXECUTABLES)/jasmin) \
+	  SMALI=$(abspath $(HOST_OUT_EXECUTABLES)/smali) \
+	  DXMERGER=$(abspath $(HOST_OUT_EXECUTABLES)/dexmerger) \
+	  JACK_VERSION=$(JACK_DEFAULT_VERSION) \
+	  JACK=$(abspath $(JACK)) \
+	  JACK_VERSION=$(JACK_DEFAULT_VERSION) \
+	  JACK_CLASSPATH=$(TARGET_JACK_CLASSPATH) \
+	  $(art_path)/test/run-test --never-clean --output-path $(nanoscope_test_dir) $(nanoscope_test)

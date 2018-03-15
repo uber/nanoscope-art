@@ -904,4 +904,4 @@ fi
 
 ) 2>&${real_stderr} 1>&2
 
-exit 1
+exit 0
