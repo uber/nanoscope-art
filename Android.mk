@@ -595,3 +595,45 @@ run-nanoscope-tests: $(TEST_ART_RUN_TEST_DEPENDENCIES) $(TARGET_JACK_CLASSPATH_D
 	  JACK_VERSION=$(JACK_DEFAULT_VERSION) \
 	  JACK_CLASSPATH=$(TARGET_JACK_CLASSPATH) \
 	  $(art_path)/test/run-test --never-clean --output-path $(nanoscope_test_dir) $(nanoscope_test)
+
+VERSION_FILE := $(art_path)/version.txt
+ROM_VERSION := $(shell cat $(VERSION_FILE) | tr -d " \t\n\r" )
+ROM_FILE := $(OUT_DIR)/nanoscope-rom-$(ROM_VERSION).zip
+ROM_INSTALL_FILE := $(PRODUCT_OUT)/install.sh
+ROM_FILENAMES := \
+  android-info.txt \
+  ramdisk.img \
+  boot.img \
+  install.sh \
+  recovery.img \
+  vendor.img \
+  cache.img \
+  ramdisk-recovery.img \
+  system.img
+
+ROM_FILE_DEPENDENCIES := $(foreach file, $(ROM_FILENAMES), $(PRODUCT_OUT)/$(file))
+
+export ADDITIONAL_BUILD_PROPERTIES="ro.build.nanoscope=$(ROM_VERSION)"
+
+$(ROM_INSTALL_FILE):
+	cp $(art_path)/__install.sh $(ROM_INSTALL_FILE)
+	chmod +x $(ROM_INSTALL_FILE)
+
+$(ROM_FILE): $(ROM_FILE_DEPENDENCIES)
+	rm -f $(ROM_FILE)
+	zip -j $(ROM_FILE) $(ROM_FILE_DEPENDENCIES)
+
+.PHONY: make-release
+make-release: $(ROM_FILE)
+	echo $(ROM_FILE)
+
+TEST_ROM_DIR := $(OUT_DIR)/nanoscope-rom-test
+
+.PHONY: test-release
+test-release: $(ROM_FILE)
+	rm -rf $(TEST_ROM_DIR)
+	mkdir -p $(TEST_ROM_DIR)
+	unzip $(ROM_FILE) -d $(TEST_ROM_DIR)
+	$(TEST_ROM_DIR)/install.sh
+	adb wait-for-device
+	adb shell getprop ro.build.nanoscope
