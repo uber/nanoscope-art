@@ -615,7 +615,7 @@ ROM_FILE_DEPENDENCIES := $(foreach file, $(ROM_FILENAMES), $(PRODUCT_OUT)/$(file
 
 ADDITIONAL_BUILD_PROPERTIES += "ro.build.nanoscope=$(ROM_VERSION)"
 
-$(ROM_INSTALL_FILE):
+$(ROM_INSTALL_FILE): $(art_path)/__install.sh
 	cp $(art_path)/__install.sh $(ROM_INSTALL_FILE)
 	chmod +x $(ROM_INSTALL_FILE)
 
