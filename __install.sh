@@ -3,11 +3,9 @@
 # Flashes Nanoscope ROM onto adb-connected device.
 
 WORK_DIR=$(dirname "$0")
-CONFIG_DIR=$HOME/.nanoscope
-
-function ensure_config_dir() {
-	mkdir -p $CONFIG_DIR
-}
+OVERLAY_DIR=$HOME/.nanoscope/overlay
+OVERLAY_URL_HASH=$(echo $NANOSCOPE_OVERLAY | md5)
+OVERLAY_ZIP_DIR=$OVERLAY_DIR/$OVERLAY_URL_HASH
 
 function wait_for_device() {
 	set -e
@@ -69,7 +67,44 @@ function flash() {
 	ANDROID_PRODUCT_OUT=$WORK_DIR fastboot flashall
 }
 
+function ensure_overlay_downloaded() {
+	set -e
+	if [ ! -d "$OVERLAY_ZIP_DIR" ]; then
+		mkdir -p $OVERLAY_DIR
+		curl -L $NANOSCOPE_OVERLAY > overlay.zip
+		unzip overlay.zip -d $OVERLAY_ZIP_DIR
+		rm overlay.zip
+	fi
+}
+
+function sideload_overlay() {
+	set -e
+	wait_for_boot
+	ensure_root
+	adb disable-verity
+	adb reboot sideload
+	adb kill-server
+	adb wait-for-sideload
+	adb sideload "$OVERLAY_ZIP_DIR/sideload.zip"
+	sleep 5
+	adb reboot
+	wait_for_boot
+	adb root
+	adb shell pm grant com.google.android.gms android.permission.ACCESS_FINE_LOCATION
+}
+
 set -o xtrace
 set -e
 
+# If set, NANOSCOPE_OVERLAY points to a zip URL that contains *.img override files and
+# a sideload.zip file to be sideloaded over the base ROM. All files are optional.
+if [ -n "$NANOSCOPE_OVERLAY" ]; then
+	ensure_overlay_downloaded
+	cp $OVERLAY_ZIP_DIR/*.img . || :
+fi
+
 flash
+
+if [ -f "$OVERLAY_ZIP_DIR/sideload.zip" ]; then
+	sideload_overlay
+fi
