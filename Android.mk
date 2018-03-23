@@ -613,7 +613,7 @@ ROM_FILENAMES := \
 
 ROM_FILE_DEPENDENCIES := $(foreach file, $(ROM_FILENAMES), $(PRODUCT_OUT)/$(file))
 
-export ADDITIONAL_BUILD_PROPERTIES="ro.build.nanoscope=$(ROM_VERSION)"
+ADDITIONAL_BUILD_PROPERTIES += "ro.build.nanoscope=$(ROM_VERSION)"
 
 $(ROM_INSTALL_FILE):
 	cp $(art_path)/__install.sh $(ROM_INSTALL_FILE)
