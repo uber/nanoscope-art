@@ -64,7 +64,7 @@ function flash() {
 	set -e
 	ensure_bootloader_unlocked
 	ensure_on_bootloader
-	ANDROID_PRODUCT_OUT=$WORK_DIR fastboot flashall
+	ANDROID_PRODUCT_OUT=$WORK_DIR fastboot flashall -w
 }
 
 function ensure_overlay_downloaded() {
