@@ -30,6 +30,7 @@
 #include <fstream>
 #include <stdio.h>
 #include <libgen.h>
+#include <unistd.h>
 
 #include "arch/context.h"
 #include "art_field-inl.h"
@@ -114,12 +115,44 @@ uint64_t ALWAYS_INLINE generic_timer_count() {
   t = t << 32 | t1;
 #elif defined(__aarch64__)
   asm volatile("mrs %0, cntvct_el0" : "=r"(t));
+#elif defined(__i386)
+  unsigned int lo, hi;
+  asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
+  t = ((uint64_t)hi << 32) | lo;
 #endif
   return t;
 }
 
+#if defined(__i386)
+// This method calculates ticks per second by comparing the built-in clock time to timer count. We call this
+// only once right before converting all trace timestamps, so this will produce inaccurate results if the
+// current frequency differs from the frequency of the clock when the timestamps were recorded. It's preferable
+// to query the frequency directly if available on the CPU architecture.
+uint64_t calculate_ticks_per_second() {
+  struct timeval start_clock_ts;
+  struct timeval end_clock_ts;
+
+  uint64_t start_timer = generic_timer_count();
+  gettimeofday(&start_clock_ts, nullptr);
+
+  usleep(100 * 1000);
+
+  uint64_t end_timer = generic_timer_count();
+  gettimeofday(&end_clock_ts, nullptr);
+
+  uint64_t start_clock_micro = (uint64_t) start_clock_ts.tv_usec;
+  uint64_t end_clock_micro = (uint64_t) end_clock_ts.tv_usec;
+
+  uint64_t timer_ticks = end_timer - start_timer;
+  uint64_t clock_duration_micro = end_clock_micro - start_clock_micro;
+
+  uint64_t ticks_per_second = timer_ticks / clock_duration_micro * 1000 * 1000;
+  return ticks_per_second;
+}
+#endif
+
 // Read the frequency of the generic timer. The register is typically only set during system boot only. So only need to check once.
-uint64_t ALWAYS_INLINE generic_timer_frequency() {
+uint64_t ALWAYS_INLINE ticks_per_second() {
   uint64_t t = 0;
 #if defined(__arm__)
   uint32_t cntfrq;
@@ -129,6 +162,8 @@ uint64_t ALWAYS_INLINE generic_timer_frequency() {
   uint64_t cntfrq_el0 = 0;
   asm volatile("mrs %0, cntfrq_el0" : "=r" (cntfrq_el0));
   t = cntfrq_el0;
+#elif defined(__i386)
+  t = calculate_ticks_per_second();
 #endif
   return t;
 }
@@ -139,7 +174,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
   std::string out_path_tmp = out_path + ".tmp";
   std::ofstream out(out_path_tmp, std::ofstream::trunc);
   int64_t* ptr = trace_data;
-  uint64_t timer_frequency = generic_timer_frequency();
+  uint64_t timer_ticks_per_second = ticks_per_second();
   uint64_t seconds_to_nanoseconds = 1000000000;
 
   uint64_t first_timestamp = 0;
@@ -168,7 +203,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
       if (UNLIKELY(first_timestamp == 0)) {
         first_timestamp = timestamp;
       }
-      timestamp = (timestamp - first_timestamp) * (seconds_to_nanoseconds / timer_frequency);
+      timestamp = (uint64_t) ((timestamp - first_timestamp) * (seconds_to_nanoseconds / (double) timer_ticks_per_second));
       out << timestamp << ":" << pretty_method << "\n";
     }
     std::rename(out_path_tmp.c_str(), out_path.c_str());
