@@ -1696,6 +1696,12 @@ void X86Assembler::rep_movsw() {
   EmitUint8(0xA5);
 }
 
+void X86Assembler::rdtsc() {
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
+  EmitUint8(0x0F);
+  EmitUint8(0x31);
+}
+
 
 X86Assembler* X86Assembler::lock() {
   AssemblerBuffer::EnsureCapacity ensured(&buffer_);

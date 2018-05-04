@@ -203,7 +203,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
       if (UNLIKELY(first_timestamp == 0)) {
         first_timestamp = timestamp;
       }
-      timestamp = (uint64_t) ((timestamp - first_timestamp) * (seconds_to_nanoseconds / (double) timer_ticks_per_second));
+      timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
       out << timestamp << ":" << pretty_method << "\n";
     }
     std::rename(out_path_tmp.c_str(), out_path.c_str());
