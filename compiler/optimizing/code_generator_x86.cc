@@ -1142,13 +1142,78 @@ void InstructionCodeGeneratorX86::HandleGoto(HInstruction* got, HBasicBlock* suc
   }
 }
 
-void LocationsBuilderX86::VisitTraceStart(HTraceStart* trace_start ATTRIBUTE_UNUSED) { }
+void LocationsBuilderX86::VisitTraceStart(HTraceStart* trace_start) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(trace_start);
+  locations->AddTemp(Location::RegisterLocation(EAX));
+  locations->AddTemp(Location::RegisterLocation(EDX));
+  locations->AddTemp(Location::RequiresRegister());
+}
 
-void InstructionCodeGeneratorX86::VisitTraceStart(HTraceStart* trace_start ATTRIBUTE_UNUSED) { }
+void InstructionCodeGeneratorX86::VisitTraceStart(HTraceStart* trace_start) {
+  Label done;
+  LocationSummary* locations = trace_start->GetLocations();
+  Register trace_data_ptr = locations->GetTemp(2).AsRegister<Register>();
+  int32_t trace_data_ptr_offset = Thread::TraceDataPtrOffset<kX86WordSize>().Int32Value();
 
-void LocationsBuilderX86::VisitTraceEnd(HTraceEnd* trace_end ATTRIBUTE_UNUSED) { }
+  __ fs()->movl(trace_data_ptr, Address::Absolute(trace_data_ptr_offset));
+  __ testl(trace_data_ptr, trace_data_ptr);
+  __ j(kEqual, &done);
 
-void InstructionCodeGeneratorX86::VisitTraceEnd(HTraceEnd* trace_end ATTRIBUTE_UNUSED) { }
+  __ movl(Address(trace_data_ptr, 0), kMethodRegisterArgument);
+
+  __ rdtsc();
+
+  __ movl(Address(trace_data_ptr, 8), EAX);
+  __ movl(Address(trace_data_ptr, 12), EDX);
+
+  __ addl(trace_data_ptr, Immediate(16));
+  __ fs()->movl(Address::Absolute(trace_data_ptr_offset), trace_data_ptr);
+
+  __ Bind(&done);
+}
+
+void LocationsBuilderX86::VisitTraceEnd(HTraceEnd* trace_end) {
+  LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(trace_end);
+  locations->AddTemp(Location::RegisterLocation(EAX));
+  locations->AddTemp(Location::RegisterLocation(EDX));
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+}
+
+void InstructionCodeGeneratorX86::VisitTraceEnd(HTraceEnd* trace_end) {
+  Label done;
+  LocationSummary* locations = trace_end->GetLocations();
+  Register trace_data_ptr = locations->GetTemp(2).AsRegister<Register>();
+  Register save_eax = locations->GetTemp(3).AsRegister<Register>();
+  Register save_edx = locations->GetTemp(4).AsRegister<Register>();
+  int32_t trace_data_ptr_offset = Thread::TraceDataPtrOffset<kX86WordSize>().Int32Value();
+
+  __ fs()->movl(trace_data_ptr, Address::Absolute(trace_data_ptr_offset));
+  __ testl(trace_data_ptr, trace_data_ptr);
+  __ j(kEqual, &done);
+
+  __ movl(Address(trace_data_ptr, 0), Immediate(0));
+
+  // EAX and EDX are used for return values. Since this logic runs at the end of every method,
+  // the registers potentially hold useful values at this point so we need to save and restore
+  // them before returning.
+
+  __ movl(save_eax, EAX);
+  __ movl(save_edx, EDX);
+
+  __ rdtsc();
+  __ movl(Address(trace_data_ptr, 8), EAX);
+  __ movl(Address(trace_data_ptr, 12), EDX);
+
+  __ movl(EAX, save_eax);
+  __ movl(EDX, save_edx);
+
+  __ addl(trace_data_ptr, Immediate(16));
+  __ fs()->movl(Address::Absolute(trace_data_ptr_offset), trace_data_ptr);
+
+  __ Bind(&done);
+}
 
 void LocationsBuilderX86::VisitGoto(HGoto* got) {
   got->SetLocations(nullptr);
