@@ -598,8 +598,9 @@ run-nanoscope-tests: $(TEST_ART_RUN_TEST_DEPENDENCIES) $(TARGET_JACK_CLASSPATH_D
 
 VERSION_FILE := $(art_path)/version.txt
 ROM_VERSION := $(shell cat $(VERSION_FILE) | tr -d " \t\n\r" )
-ROM_FILE := $(OUT_DIR)/nanoscope-rom-$(ROM_VERSION).zip
-ROM_INSTALL_FILE := $(PRODUCT_OUT)/install.sh
+
+ROM_ARCHIVE := $(OUT_DIR)/nanoscope-rom-$(ROM_VERSION).zip
+ROM_INSTALL_FILE := $(ANDROID_PRODUCT_OUT)/install.sh
 ROM_FILENAMES := \
   android-info.txt \
   ramdisk.img \
@@ -610,8 +611,21 @@ ROM_FILENAMES := \
   cache.img \
   ramdisk-recovery.img \
   system.img
+ROM_FILE_DEPENDENCIES := $(foreach file, $(ROM_FILENAMES), $(ANDROID_PRODUCT_OUT)/$(file))
 
-ROM_FILE_DEPENDENCIES := $(foreach file, $(ROM_FILENAMES), $(PRODUCT_OUT)/$(file))
+EMULATOR_ARCHIVE := $(ANDROID_PRODUCT_OUT)/nanoscope-emulator-$(ROM_VERSION).zip
+LAUNCH_EMULATOR_FILE := $(ANDROID_PRODUCT_OUT)/emulator.sh
+EMULATOR_CONFIG_FILE := $(ANDROID_PRODUCT_OUT)/config.ini
+EMULATOR_DUMMY_VENDOR_FILE := $(ANDROID_PRODUCT_OUT)/vendor.img
+EMULATOR_FILENAMES := \
+  cache.img \
+  config.ini \
+  emulator.sh \
+  ramdisk.img \
+  vendor.img \
+  system.img \
+  system/build.prop
+EMULATOR_FILE_DEPENDENCIES := $(foreach file, $(EMULATOR_FILENAMES), $(ANDROID_PRODUCT_OUT)/$(file))
 
 ADDITIONAL_BUILD_PROPERTIES += "ro.build.nanoscope=$(ROM_VERSION)"
 
@@ -619,21 +633,45 @@ $(ROM_INSTALL_FILE): $(art_path)/__install.sh
 	cp $(art_path)/__install.sh $(ROM_INSTALL_FILE)
 	chmod +x $(ROM_INSTALL_FILE)
 
-$(ROM_FILE): $(ROM_FILE_DEPENDENCIES)
-	rm -f $(ROM_FILE)
-	zip -j $(ROM_FILE) $(ROM_FILE_DEPENDENCIES)
+$(ROM_ARCHIVE): $(ROM_FILE_DEPENDENCIES)
+	rm -f $(ROM_ARCHIVE)
+	zip -j $(ROM_ARCHIVE) $(ROM_FILE_DEPENDENCIES)
+
+$(LAUNCH_EMULATOR_FILE): $(art_path)/__emulator.sh
+	cp $(art_path)/__emulator.sh $(LAUNCH_EMULATOR_FILE)
+	chmod +x $(LAUNCH_EMULATOR_FILE)
+
+$(EMULATOR_CONFIG_FILE): $(art_path)/__emulator_config.ini
+	cp $(art_path)/__emulator_config.ini $(EMULATOR_CONFIG_FILE)
+
+$(EMULATOR_DUMMY_VENDOR_FILE):
+	touch $(EMULATOR_DUMMY_VENDOR_FILE)
+
+$(EMULATOR_ARCHIVE): $(EMULATOR_FILE_DEPENDENCIES)
+	rm -f $(EMULATOR_ARCHIVE)
+	(cd $(ANDROID_PRODUCT_OUT) && zip $(EMULATOR_ARCHIVE) $(EMULATOR_FILENAMES))
 
 .PHONY: make-release
-make-release: $(ROM_FILE)
-	echo $(ROM_FILE)
+make-release: $(ROM_ARCHIVE)
+	echo $(ROM_ARCHIVE)
 
-TEST_ROM_DIR := $(OUT_DIR)/nanoscope-rom-test
+.PHONY: make-emulator-release
+make-emulator-release: $(ROM_EMULATOR_FILE)
+	echo $(ROM_EMULATOR_FILE)
+
+TEST_ROM_DIR := $(ANDROID_PRODUCT_OUT)/nanoscope-rom-test
 
 .PHONY: test-release
-test-release: $(ROM_FILE)
+test-release: $(ROM_ARCHIVE)
 	rm -rf $(TEST_ROM_DIR)
 	mkdir -p $(TEST_ROM_DIR)
-	unzip $(ROM_FILE) -d $(TEST_ROM_DIR)
+	unzip $(ROM_ARCHIVE) -d $(TEST_ROM_DIR)
 	$(TEST_ROM_DIR)/install.sh
 	adb wait-for-device
 	adb shell getprop ro.build.nanoscope
+
+.PHONY: test-emulator-release
+test-emulator-release: $(EMULATOR_ARCHIVE)
+	rm -rf $(TEST_ROM_DIR)
+	mkdir -p $(TEST_ROM_DIR)
+	unzip $(EMULATOR_ARCHIVE) -d $(TEST_ROM_DIR)
