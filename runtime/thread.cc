@@ -275,7 +275,8 @@ void Thread::StopTracing(std::string out_path) {
 
   char* dir = dirname(strdup(out_path.c_str()));
   std::string mkdirs = "mkdir -p " + std::string(dir);
-  system(mkdirs.c_str());
+  int ret = system(mkdirs.c_str());
+  CHECK(ret != -1);
 
   LOG(INFO) << "nanoscope: Flushing trace data to: " << out_path;
 
