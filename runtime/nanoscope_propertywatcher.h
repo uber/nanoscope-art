@@ -26,7 +26,7 @@
 #include <unistd.h>
 #include <cutils/process_name.h>
 
-#if defined(__linux__)
+#if defined(__ANDROID__)
 // Need this next line to get around a check in "sys/_system_properties.h". These APIs are definitely not meant for
 // external use, but it's the only way to observe system property changes.
 #define _REALLY_INCLUDE_SYS__SYSTEM_PROPERTIES_H_
@@ -71,7 +71,7 @@ class NanoscopePropertyWatcher {
     NanoscopePropertyWatcher* watcher = this;
     new std::thread([watcher, thread_name]() {
       Thread* self = Thread::Attach(thread_name.c_str(), false, nullptr, false);
-#if defined(__linux__)
+#if defined(__ANDROID__)
       unsigned int serial = 0;
       while (1) {
         serial = __system_property_wait_any(serial);
@@ -112,7 +112,7 @@ class NanoscopePropertyWatcher {
 
   std::string get_system_property_value() {
     char* buffer = new char[1028];
-#if defined(__linux__)
+#if defined(__ANDROID__)
     for (std::string watched_property : watched_properties) {
       int length = __system_property_get(watched_property.c_str(), buffer);
       if (length > 0) break;
