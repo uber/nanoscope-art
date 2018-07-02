@@ -168,7 +168,7 @@ uint64_t ALWAYS_INLINE ticks_per_second() {
   return t;
 }
 
-void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
+void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, int counter)
   SHARED_REQUIRES(Locks::mutator_lock_) {
   std::map<ArtMethod*, std::string> pretty_method_cache;
   std::string out_path_tmp = out_path + ".tmp";
@@ -206,6 +206,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
       out << timestamp << ":" << pretty_method << "\n";
     }
+    out << counter << "\n";
     std::rename(out_path_tmp.c_str(), out_path.c_str());
   } else {
     LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
@@ -266,6 +267,7 @@ void Thread::StartTracing() {
   LOG(INFO) << "nanoscope: Trace started.";
   tlsPtr_.trace_data = new int64_t[40000000];  // Enough room for 10M methods
   tlsPtr_.trace_data_ptr = tlsPtr_.trace_data;
+  tls64_.counter = 0;
 }
 
 void Thread::StopTracing(std::string out_path) {
@@ -278,11 +280,11 @@ void Thread::StopTracing(std::string out_path) {
   system(mkdirs.c_str());
 
   LOG(INFO) << "nanoscope: Flushing trace data to: " << out_path;
-
+  LOG(INFO) << "nanoscope: Counter ending at: " << tls64_.counter;
   if (kIsDebugBuild) {
-    flush_trace_data(out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr);
+    flush_trace_data(out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tls64_.counter);
   } else {
-    new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr);
+    new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tls64_.counter);
   }
   tlsPtr_.trace_data = nullptr;
   tlsPtr_.trace_data_ptr = nullptr;
@@ -299,6 +301,10 @@ void Thread::StopTracing(std::string out_path) {
     tlsPtr_.trace_data = nullptr;
     tlsPtr_.trace_data_ptr = nullptr;
   }
+}
+
+void Thread::TimerHandler(){
+  tls64_.counter = tls64_.counter + 1;
 }
 
 void Thread::InitCardTable() {

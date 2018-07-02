@@ -25,14 +25,28 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <cutils/process_name.h>
+#include <sys/mman.h>
 
-#if defined(__linux__)
+#if defined(__ANDROID__)
 // Need this next line to get around a check in "sys/_system_properties.h". These APIs are definitely not meant for
 // external use, but it's the only way to observe system property changes.
 #define _REALLY_INCLUDE_SYS__SYSTEM_PROPERTIES_H_
 #include <sys/_system_properties.h>
 #include <sys/system_properties.h>
 #endif
+
+#if defined(__ANDROID__)
+#include <linux/perf_event.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <asm/unistd.h>
+static int perf_event_open(const perf_event_attr& attr, pid_t pid, int cpu,
+                           int group_fd, unsigned long flags) {  // NOLINT
+  return syscall(__NR_perf_event_open, &attr, pid, cpu, group_fd, flags);
+}
+#endif
+
+#define SIGTIMER (SIGRTMIN + 3)
 
 namespace art {
 
@@ -49,20 +63,25 @@ namespace art {
 class NanoscopePropertyWatcher {
  public:
   static void attach(std::string package_name) {
-    Thread* traced = Thread::Current();
-    NanoscopePropertyWatcher* watcher = new NanoscopePropertyWatcher(traced, package_name);
+    Thread* to_trace = Thread::Current();
+    NanoscopePropertyWatcher* watcher = new NanoscopePropertyWatcher(package_name);
+    traced = to_trace;
     watcher->watch();
   }
 
  private:
-  Thread* const traced;
+  static Thread* traced;
+
   const std::string package_name;
   const std::string watched_properties[3] = {"dev.nanoscope", "dev.arttracing", "arttracing"};
   const std::string output_dir = "/data/data/" + package_name + "/files";
 
   std::string output_path;
+#if defined(__ANDROID__)
+  static int fd;                       // perf_fd
+#endif
 
-  explicit NanoscopePropertyWatcher(Thread* _traced, std::string _package_name) : traced(_traced), package_name(_package_name) {}
+  explicit NanoscopePropertyWatcher(std::string _package_name) : package_name(_package_name) {}
 
   void watch() {
     refresh_state(Thread::Current());
@@ -71,7 +90,7 @@ class NanoscopePropertyWatcher {
     NanoscopePropertyWatcher* watcher = this;
     new std::thread([watcher, thread_name]() {
       Thread* self = Thread::Attach(thread_name.c_str(), false, nullptr, false);
-#if defined(__linux__)
+#if defined(__ANDROID__)
       unsigned int serial = 0;
       while (1) {
         serial = __system_property_wait_any(serial);
@@ -112,7 +131,7 @@ class NanoscopePropertyWatcher {
 
   std::string get_system_property_value() {
     char* buffer = new char[1028];
-#if defined(__linux__)
+#if defined(__ANDROID__)
     for (std::string watched_property : watched_properties) {
       int length = __system_property_get(watched_property.c_str(), buffer);
       if (length > 0) break;
@@ -121,26 +140,96 @@ class NanoscopePropertyWatcher {
     return std::string(buffer);
   }
 
+#if defined(__ANDROID__)
+  static void signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo, void *ucontext ATTRIBUTE_UNUSED) {
+    if (fd != siginfo -> si_fd) {
+      LOG(ERROR) << "nanoscope: Sanity check fails: perf fd should be the same";
+    }
+    LOG(INFO) << "nanoscope: entering sig handler";
+    ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
+    traced->TimerHandler();
+    ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
+  }
+
+  void install_sig_handler() {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(struct sigaction));
+    sa.sa_sigaction = signal_handler;
+    sa.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGTIMER, &sa, NULL) < 0) {
+      LOG(ERROR) << "nanoscope: Error setting up signal handler.";
+      return;
+    }
+    LOG(INFO) << "nanoscope: set up sig handler for SIGTIMER";
+  }
+#endif
+
   void start_tracing(Thread* self, std::string _output_path) {
+    // nanoscope tracing
     output_path = _output_path;
     remove(output_path.c_str());
-
     Locks::mutator_lock_->SharedLock(self);
     traced->StartTracing();
     Locks::mutator_lock_->SharedUnlock(self);
+
+#if defined(__ANDROID__)
+    install_sig_handler();
+    int64_t interval = 50;  // 10 ms
+    // singal timer setup
+    struct perf_event_attr pe;
+    memset(&pe, 0, sizeof(struct perf_event_attr));
+    pe.type = PERF_TYPE_SOFTWARE;
+    pe.size = sizeof(struct perf_event_attr);
+    pe.config = PERF_COUNT_SW_CPU_CLOCK;
+    pe.sample_period = interval;
+    pe.sample_type = PERF_SAMPLE_IP;
+    pe.read_format = PERF_FORMAT_GROUP|PERF_FORMAT_ID;
+    pe.disabled = 1;
+    pe.pinned = 1;
+    // pe.exclude_kernel = 1;
+    // pe.exclude_hv = 1;
+    pe.wakeup_events = 1;
+    fd = perf_event_open(pe, traced->GetTid(), -1, -1, 0);  // current thread, all cpu
+    if (fd < 0) {
+       LOG(ERROR) << "nanoscope: Fail to open perf event file.";
+       return;
+    }
+
+    void *blargh;
+
+    blargh=mmap(NULL, (1+1)*4096, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    fcntl(fd, F_SETFL, O_RDWR | O_NONBLOCK | O_ASYNC);
+    fcntl(fd, F_SETSIG, SIGTIMER);
+
+    // Deliver the signal to this thread
+    struct f_owner_ex fown_ex;
+    fown_ex.type = F_OWNER_TID;
+    fown_ex.pid  = traced->GetTid();
+    int ret = fcntl(fd, F_SETOWN_EX, &fown_ex);
+    if (ret == -1) {
+      LOG(ERROR) << "nanoscope: Failed to set the owner of the perf event file";
+      return;
+    }
+    ioctl(fd, PERF_EVENT_IOC_RESET, 0);
+    ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
+#endif
   }
 
   void stop_tracing(Thread* self) {
+#if defined(__ANDROID__)
+    ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
+    close(fd);
+#endif
     if (output_path.empty()) {
       LOG(ERROR) << "nanoscope: No output path found.";
       return;
     }
-
     Locks::mutator_lock_->SharedLock(self);
     traced->StopTracing(output_path);
     Locks::mutator_lock_->SharedUnlock(self);
 
     output_path = "";
+
   }
 };
 

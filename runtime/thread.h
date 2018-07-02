@@ -177,6 +177,9 @@ class Thread {
   // Disables tracing on this Thread and flushes logs to the file at out_path.
   void StopTracing(std::string out_path) SHARED_REQUIRES(Locks::mutator_lock_);
 
+  // Disables tracing on this Thread and flushes logs to the file at out_path.
+  void TimerHandler();
+
   // Creates a new native thread corresponding to the given managed peer.
   // Used to implement Thread.start.
   static void CreateNativeThread(JNIEnv* env, jobject peer, size_t stack_size, bool daemon);
@@ -1384,6 +1387,9 @@ class Thread {
     uint64_t trace_clock_base;
 
     RuntimeStats stats;
+
+    // Holds counter for timer handler
+    uint64_t counter;
   } tls64_;
 
   struct PACKED(sizeof(void*)) tls_ptr_sized_values {

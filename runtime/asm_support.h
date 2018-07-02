@@ -108,7 +108,7 @@ ADD_TEST_EQ(THREAD_IS_GC_MARKING_OFFSET,
             art::Thread::IsGcMarkingOffset<__SIZEOF_POINTER__>().Int32Value())
 
 // Offset of field Thread::tlsPtr_.trace_data_ptr.
-#define THREAD_TRACE_DATA_OFFSET 128
+#define THREAD_TRACE_DATA_OFFSET 136
 ADD_TEST_EQ(THREAD_TRACE_DATA_OFFSET,
             art::Thread::TraceDataPtrOffset<__SIZEOF_POINTER__>().Int32Value())
 
