@@ -113,7 +113,7 @@ ADD_TEST_EQ(THREAD_TRACE_DATA_OFFSET,
             art::Thread::TraceDataPtrOffset<__SIZEOF_POINTER__>().Int32Value())
 
 // Offset of field Thread::tlsPtr_.card_table.
-#define THREAD_CARD_TABLE_OFFSET (THREAD_TRACE_DATA_OFFSET + (2 * __SIZEOF_POINTER__))
+#define THREAD_CARD_TABLE_OFFSET (THREAD_TRACE_DATA_OFFSET + (6 * __SIZEOF_POINTER__))
 ADD_TEST_EQ(THREAD_CARD_TABLE_OFFSET,
             art::Thread::CardTableOffset<__SIZEOF_POINTER__>().Int32Value())
 

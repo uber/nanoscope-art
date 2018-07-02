@@ -416,6 +416,11 @@ inline void FlushInstructionCache(char* begin, char* end) {
 #endif
 }
 
+uint64_t ALWAYS_INLINE generic_timer_count();
+uint64_t ALWAYS_INLINE generic_timer_ts();
+
+uint64_t ALWAYS_INLINE ticks_per_second();
+
 }  // namespace art
 
 #endif  // ART_RUNTIME_UTILS_H_
