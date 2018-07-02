@@ -108,12 +108,12 @@ ADD_TEST_EQ(THREAD_IS_GC_MARKING_OFFSET,
             art::Thread::IsGcMarkingOffset<__SIZEOF_POINTER__>().Int32Value())
 
 // Offset of field Thread::tlsPtr_.trace_data_ptr.
-#define THREAD_TRACE_DATA_OFFSET 136
+#define THREAD_TRACE_DATA_OFFSET 128
 ADD_TEST_EQ(THREAD_TRACE_DATA_OFFSET,
             art::Thread::TraceDataPtrOffset<__SIZEOF_POINTER__>().Int32Value())
 
 // Offset of field Thread::tlsPtr_.card_table.
-#define THREAD_CARD_TABLE_OFFSET (THREAD_TRACE_DATA_OFFSET + (2 * __SIZEOF_POINTER__))
+#define THREAD_CARD_TABLE_OFFSET (THREAD_TRACE_DATA_OFFSET + (4 * __SIZEOF_POINTER__))
 ADD_TEST_EQ(THREAD_CARD_TABLE_OFFSET,
             art::Thread::CardTableOffset<__SIZEOF_POINTER__>().Int32Value())
 

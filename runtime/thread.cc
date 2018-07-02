@@ -168,7 +168,7 @@ uint64_t ALWAYS_INLINE ticks_per_second() {
   return t;
 }
 
-void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, int counter)
+void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, int64_t* timer_data, int64_t* timer_end)
   SHARED_REQUIRES(Locks::mutator_lock_) {
   std::map<ArtMethod*, std::string> pretty_method_cache;
   std::string out_path_tmp = out_path + ".tmp";
@@ -206,7 +206,16 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, i
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
       out << timestamp << ":" << pretty_method << "\n";
     }
-    out << counter << "\n";
+    ptr = timer_data;
+    while (ptr < timer_end) {
+      int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
+      if (UNLIKELY(first_timestamp == 0)) {
+        first_timestamp = timestamp;
+      }
+      timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
+      out << timestamp << "\n";
+    }
+
     std::rename(out_path_tmp.c_str(), out_path.c_str());
   } else {
     LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
@@ -265,9 +274,10 @@ void Thread::TraceEnd() {
 
 void Thread::StartTracing() {
   LOG(INFO) << "nanoscope: Trace started.";
-  tlsPtr_.trace_data = new int64_t[40000000];  // Enough room for 10M methods
+  tlsPtr_.trace_data = new int64_t[30000000];  // Enough room for 10M methods
   tlsPtr_.trace_data_ptr = tlsPtr_.trace_data;
-  tls64_.counter = 0;
+  tlsPtr_.timer_data = new int64_t[10000000];
+  tlsPtr_.timer_data_ptr = tlsPtr_.timer_data;
 }
 
 void Thread::StopTracing(std::string out_path) {
@@ -280,14 +290,15 @@ void Thread::StopTracing(std::string out_path) {
   system(mkdirs.c_str());
 
   LOG(INFO) << "nanoscope: Flushing trace data to: " << out_path;
-  LOG(INFO) << "nanoscope: Counter ending at: " << tls64_.counter;
   if (kIsDebugBuild) {
-    flush_trace_data(out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tls64_.counter);
+    flush_trace_data(out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tlsPtr_.timer_data,tlsPtr_.timer_data_ptr);
   } else {
-    new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tls64_.counter);
+    new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tlsPtr_.timer_data, tlsPtr_.timer_data_ptr);
   }
   tlsPtr_.trace_data = nullptr;
   tlsPtr_.trace_data_ptr = nullptr;
+  tlsPtr_.timer_data = nullptr;
+  tlsPtr_.timer_data_ptr = nullptr;
 
   // A race condition exists if we stop tracing from a different Thread. In Thread::TraceStart and Thread::TraceEnd
   // we may end up incrementing and dereferencing trace_data_ptr after we've nulled it out above. If we hit this race
@@ -300,11 +311,15 @@ void Thread::StopTracing(std::string out_path) {
     usleep(1000 * 100);
     tlsPtr_.trace_data = nullptr;
     tlsPtr_.trace_data_ptr = nullptr;
+    tlsPtr_.timer_data = nullptr;
+    tlsPtr_.timer_data_ptr = nullptr;
   }
 }
 
 void Thread::TimerHandler(){
-  tls64_.counter = tls64_.counter + 1;
+  if(tlsPtr_.timer_data_ptr != nullptr){
+    *tlsPtr_.timer_data_ptr ++ = generic_timer_count();
+  }
 }
 
 void Thread::InitCardTable() {

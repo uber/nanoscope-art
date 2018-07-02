@@ -1388,8 +1388,6 @@ class Thread {
 
     RuntimeStats stats;
 
-    // Holds counter for timer handler
-    uint64_t counter;
   } tls64_;
 
   struct PACKED(sizeof(void*)) tls_ptr_sized_values {
@@ -1415,6 +1413,12 @@ class Thread {
 
     // Holds our tracing log data.
     int64_t* trace_data;
+
+    // Marks our current position in trace_data.
+    int64_t* timer_data_ptr;
+
+    // Holds our tracing log data.
+    int64_t* timer_data;
 
     // The biased card table, see CardTable for details.
     uint8_t* card_table;

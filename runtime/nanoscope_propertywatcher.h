@@ -145,8 +145,8 @@ class NanoscopePropertyWatcher {
     if (fd != siginfo -> si_fd) {
       LOG(ERROR) << "nanoscope: Sanity check fails: perf fd should be the same";
     }
-    LOG(INFO) << "nanoscope: entering sig handler";
     ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
+    // LOG(INFO) << "nanoscope: entering sig handler";
     traced->TimerHandler();
     ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
   }
@@ -174,7 +174,7 @@ class NanoscopePropertyWatcher {
 
 #if defined(__ANDROID__)
     install_sig_handler();
-    int64_t interval = 50;  // 10 ms
+    int64_t interval = 10000000;  // 10 ms
     // singal timer setup
     struct perf_event_attr pe;
     memset(&pe, 0, sizeof(struct perf_event_attr));
@@ -182,14 +182,14 @@ class NanoscopePropertyWatcher {
     pe.size = sizeof(struct perf_event_attr);
     pe.config = PERF_COUNT_SW_CPU_CLOCK;
     pe.sample_period = interval;
-    pe.sample_type = PERF_SAMPLE_IP;
+    pe.sample_type = PERF_SAMPLE_TIME;
     pe.read_format = PERF_FORMAT_GROUP|PERF_FORMAT_ID;
     pe.disabled = 1;
     pe.pinned = 1;
     // pe.exclude_kernel = 1;
     // pe.exclude_hv = 1;
     pe.wakeup_events = 1;
-    fd = perf_event_open(pe, traced->GetTid(), -1, -1, 0);  // current thread, all cpu
+    fd = perf_event_open(pe, traced->GetTid(), -1, -1, 0);
     if (fd < 0) {
        LOG(ERROR) << "nanoscope: Fail to open perf event file.";
        return;
@@ -201,7 +201,7 @@ class NanoscopePropertyWatcher {
     fcntl(fd, F_SETFL, O_RDWR | O_NONBLOCK | O_ASYNC);
     fcntl(fd, F_SETSIG, SIGTIMER);
 
-    // Deliver the signal to this thread
+    // Deliver the signal to the thread
     struct f_owner_ex fown_ex;
     fown_ex.type = F_OWNER_TID;
     fown_ex.pid  = traced->GetTid();
