@@ -150,6 +150,8 @@ class NanoscopePropertyWatcher {
 
       stop_tracing(self);
     } else {
+      if (!output_path.empty()) return;
+
       std::stringstream ss(value);
 
       std::string _package_name;
