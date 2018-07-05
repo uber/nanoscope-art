@@ -179,6 +179,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
 
   uint64_t first_timestamp = 0;
   if (out.is_open()) {
+    ptr = end;    // Test skip output trace data
     while (ptr < end) {
       ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
       std::string pretty_method;

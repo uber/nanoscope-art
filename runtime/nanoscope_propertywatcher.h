@@ -173,7 +173,7 @@ class NanoscopePropertyWatcher {
   }
 
 #if defined(__ANDROID__)
-  static void signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo, void *ucontext ATTRIBUTE_UNUSED) {
+  static void signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo ATTRIBUTE_UNUSED, void *ucontext ATTRIBUTE_UNUSED) {
     // if (fd != siginfo -> si_fd) {
     //   LOG(ERROR) << "nanoscope: Sanity check fails: perf fd should be the same";
     //   return;
@@ -228,7 +228,7 @@ class NanoscopePropertyWatcher {
 #if defined(__ANDROID__)
     LOG(INFO) << "nanoscope: start_tracing for thread " << to_trace -> GetTid();
     install_sig_handler();
-    int64_t interval = 50000000;  // 50 ms
+    int64_t interval = 100000000;  // 100 ms
     // singal timer setup
     struct perf_event_attr pe;
     memset(&pe, 0, sizeof(struct perf_event_attr));
@@ -244,8 +244,8 @@ class NanoscopePropertyWatcher {
     // pe.exclude_hv = 1;
     // pe.exclude_idle = 1;
     pe.wakeup_events = 1;
-    fd = perf_event_open(pe, traced->GetTid(), -1, -1, 0);
-    // fd = perf_event_open(pe, 0, -1, -1, 0);
+    // fd = perf_event_open(pe, traced->GetTid(), -1, -1, 0);
+    fd = perf_event_open(pe, -1, 0, -1, 0);
     if (fd < 0) {
        LOG(ERROR) << "nanoscope: Fail to open perf event file ";
        LOG(ERROR) << "nanoscope: " << strerror(errno);
@@ -268,10 +268,6 @@ class NanoscopePropertyWatcher {
     }
     ioctl(fd, PERF_EVENT_IOC_RESET, 0);
     ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
-    // long sec = interval / 1000000000;
-    // long usec = (interval % 1000000000) / 1000;
-    // struct itimerval tv = {{sec, usec}, {sec, usec}};
-    // setitimer(ITIMER_PROF, &tv, NULL);
 #endif
   }
 
@@ -282,8 +278,6 @@ class NanoscopePropertyWatcher {
     fd = 0;
     munmap(page, 2 * PERF_PAGE_SIZE);
     page = NULL;
-    // struct itimerval tv = {{0, 0}, {0, 0}};
-    // setitimer(ITIMER_PROF, &tv, NULL);
 
 #endif
     if (output_path.empty()) {
