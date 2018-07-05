@@ -178,7 +178,7 @@ class Thread {
   void StopTracing(std::string out_path) SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Disables tracing on this Thread and flushes logs to the file at out_path.
-  void TimerHandler();
+  void TimerHandler(uint64_t time);
 
   // Creates a new native thread corresponding to the given managed peer.
   // Used to implement Thread.start.
@@ -1415,10 +1415,10 @@ class Thread {
     int64_t* trace_data;
 
     // Marks our current position in trace_data.
-    int64_t* timer_data_ptr;
+    uint64_t* timer_data_ptr;
 
     // Holds our tracing log data.
-    int64_t* timer_data;
+    uint64_t* timer_data;
 
     // The biased card table, see CardTable for details.
     uint8_t* card_table;

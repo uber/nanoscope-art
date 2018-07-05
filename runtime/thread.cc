@@ -168,7 +168,7 @@ uint64_t ALWAYS_INLINE ticks_per_second() {
   return t;
 }
 
-void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, int64_t* timer_data, int64_t* timer_end)
+void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, uint64_t* timer_data, uint64_t* timer_end)
   SHARED_REQUIRES(Locks::mutator_lock_) {
   std::map<ArtMethod*, std::string> pretty_method_cache;
   std::string out_path_tmp = out_path + ".tmp";
@@ -206,14 +206,15 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, i
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
       out << timestamp << ":" << pretty_method << "\n";
     }
-    ptr = timer_data;
-    while (ptr < timer_end) {
-      int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
+    uint64_t* timer_ptr = timer_data;
+    while (timer_ptr < timer_end) {
+      uint64_t timestamp = reinterpret_cast<uint64_t>(*timer_ptr++);
       if (UNLIKELY(first_timestamp == 0)) {
         first_timestamp = timestamp;
       }
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
-      out << timestamp << "\n";
+      uint64_t signal_time = reinterpret_cast<uint64_t>(*timer_ptr++);
+      out << timestamp << ":" << signal_time << "\n";
     }
 
     std::rename(out_path_tmp.c_str(), out_path.c_str());
@@ -273,10 +274,10 @@ void Thread::TraceEnd() {
 }
 
 void Thread::StartTracing() {
-  LOG(INFO) << "nanoscope: Trace started.";
+  LOG(INFO) << "nanoscope: Trace started, thread " << GetTid();
   tlsPtr_.trace_data = new int64_t[30000000];  // Enough room for 10M methods
   tlsPtr_.trace_data_ptr = tlsPtr_.trace_data;
-  tlsPtr_.timer_data = new int64_t[10000000];
+  tlsPtr_.timer_data = new uint64_t[10000000];
   tlsPtr_.timer_data_ptr = tlsPtr_.timer_data;
 }
 
@@ -316,9 +317,12 @@ void Thread::StopTracing(std::string out_path) {
   }
 }
 
-void Thread::TimerHandler(){
+void Thread::TimerHandler(uint64_t time){
   if(tlsPtr_.timer_data_ptr != nullptr){
     *tlsPtr_.timer_data_ptr ++ = generic_timer_count();
+    *tlsPtr_.timer_data_ptr ++ = time;
+  } else {
+    LOG(INFO) << "nanoscope: wrong thread" << "\n";
   }
 }
 
