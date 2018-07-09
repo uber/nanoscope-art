@@ -172,14 +172,25 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
   SHARED_REQUIRES(Locks::mutator_lock_) {
   std::map<ArtMethod*, std::string> pretty_method_cache;
   std::string out_path_tmp = out_path + ".tmp";
+  std::string out_path_timer = out_path + ".timer";
   std::ofstream out(out_path_tmp, std::ofstream::trunc);
+  std::ofstream out2(out_path_timer, std::ofstream::trunc);
   int64_t* ptr = trace_data;
   uint64_t timer_ticks_per_second = ticks_per_second();
   uint64_t seconds_to_nanoseconds = 1000000000;
 
   uint64_t first_timestamp = 0;
+  uint64_t* timer_ptr = timer_data;
+  if(ptr < end && timer_ptr < timer_end){
+    uint64_t first_method_ts = (uint64_t)reinterpret_cast<int64_t>(*ptr);
+    uint64_t first_timer_ts = reinterpret_cast<uint64_t>(*timer_ptr);
+    if(first_method_ts < first_timer_ts){
+      first_timestamp = first_method_ts;
+    } else {
+      first_timestamp = first_timer_ts;
+    }
+  }
   if (out.is_open()) {
-    ptr = end;    // Test skip output trace data
     while (ptr < end) {
       ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
       std::string pretty_method;
@@ -201,23 +212,15 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
         }
       }
       int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
-      if (UNLIKELY(first_timestamp == 0)) {
-        first_timestamp = timestamp;
-      }
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
       out << timestamp << ":" << pretty_method << "\n";
     }
-    uint64_t* timer_ptr = timer_data;
     while (timer_ptr < timer_end) {
       uint64_t timestamp = reinterpret_cast<uint64_t>(*timer_ptr++);
-      if (UNLIKELY(first_timestamp == 0)) {
-        first_timestamp = timestamp;
-      }
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
       uint64_t signal_time = reinterpret_cast<uint64_t>(*timer_ptr++);
-      out << timestamp << ":" << signal_time << "\n";
+      out2 << timestamp << ", " << signal_time << "\n";
     }
-
     std::rename(out_path_tmp.c_str(), out_path.c_str());
   } else {
     LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
@@ -276,9 +279,9 @@ void Thread::TraceEnd() {
 
 void Thread::StartTracing() {
   LOG(INFO) << "nanoscope: Trace started, thread " << GetTid();
-  tlsPtr_.trace_data = new int64_t[30000000];  // Enough room for 10M methods
+  tlsPtr_.trace_data = new int64_t[40000000];  // Enough room for 10M methods
   tlsPtr_.trace_data_ptr = tlsPtr_.trace_data;
-  tlsPtr_.timer_data = new uint64_t[10000000];
+  tlsPtr_.timer_data = new uint64_t[40000000];
   tlsPtr_.timer_data_ptr = tlsPtr_.timer_data;
 }
 

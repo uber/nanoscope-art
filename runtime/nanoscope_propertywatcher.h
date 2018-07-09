@@ -43,12 +43,14 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <asm/unistd.h>
+#include <time.h>
 static int perf_event_open(const perf_event_attr& attr, pid_t pid, int cpu,
                            int group_fd, unsigned long flags) {  // NOLINT
   return syscall(__NR_perf_event_open, &attr, pid, cpu, group_fd, flags);
 }
 #include <linux/unistd.h>
 #endif
+
 // #define SIGTIMER (SIGRTMIN + 3)
 #define SIGTIMER (SIGPROF)
 // #define SIGTIMER (SIGIO)
@@ -197,7 +199,11 @@ class NanoscopePropertyWatcher {
 
     //   page->data_tail = head;
     // }
-    traced -> TimerHandler(0);
+    struct timespec thread_cpu_time;
+    if(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &thread_cpu_time) < 0){
+      LOG(ERROR) << "nanoscope: error get clock time";
+    }
+    traced -> TimerHandler(thread_cpu_time.tv_sec * 1e+9 + thread_cpu_time.tv_nsec);
     ioctl(fd, PERF_EVENT_IOC_RESET, 0);
     ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
 
@@ -228,7 +234,7 @@ class NanoscopePropertyWatcher {
 #if defined(__ANDROID__)
     LOG(INFO) << "nanoscope: start_tracing for thread " << to_trace -> GetTid();
     install_sig_handler();
-    int64_t interval = 100000000;  // 100 ms
+    int64_t interval = 1000000;  // 100 ms
     // singal timer setup
     struct perf_event_attr pe;
     memset(&pe, 0, sizeof(struct perf_event_attr));
