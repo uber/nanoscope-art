@@ -178,7 +178,7 @@ class Thread {
   void StopTracing(std::string out_path) SHARED_REQUIRES(Locks::mutator_lock_);
 
   // Disables tracing on this Thread and flushes logs to the file at out_path.
-  void TimerHandler(uint64_t time);
+  void TimerHandler(uint64_t time, uint64_t maj_pf = 0, uint64_t min_pf = 0);
 
   // Creates a new native thread corresponding to the given managed peer.
   // Used to implement Thread.start.

@@ -182,14 +182,10 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
   uint64_t first_timestamp = 0;
   uint64_t* timer_ptr = timer_data;
   if(ptr < end && timer_ptr < timer_end){
-    uint64_t first_method_ts = (uint64_t)reinterpret_cast<int64_t>(*ptr);
     uint64_t first_timer_ts = reinterpret_cast<uint64_t>(*timer_ptr);
-    if(first_method_ts < first_timer_ts){
-      first_timestamp = first_method_ts;
-    } else {
-      first_timestamp = first_timer_ts;
-    }
+    first_timestamp = first_timer_ts;
   }
+  LOG(INFO) << "nanoscope: first ts:" << first_timestamp;
   if (out.is_open()) {
     while (ptr < end) {
       ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
@@ -212,6 +208,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
         }
       }
       int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
+      if((uint64_t) timestamp< first_timestamp)  first_timestamp = timestamp;
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
       out << timestamp << ":" << pretty_method << "\n";
     }
@@ -219,7 +216,9 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
       uint64_t timestamp = reinterpret_cast<uint64_t>(*timer_ptr++);
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
       uint64_t signal_time = reinterpret_cast<uint64_t>(*timer_ptr++);
-      out2 << timestamp << ", " << signal_time << "\n";
+      uint64_t maj_pf = reinterpret_cast<uint64_t>(*timer_ptr++);
+      uint64_t min_pf = reinterpret_cast<uint64_t>(*timer_ptr++);
+      out2 << timestamp << ", " << signal_time << ", " << maj_pf << ", " << min_pf << "\n";
     }
     std::rename(out_path_tmp.c_str(), out_path.c_str());
   } else {
@@ -321,10 +320,12 @@ void Thread::StopTracing(std::string out_path) {
   }
 }
 
-void Thread::TimerHandler(uint64_t time){
+void Thread::TimerHandler(uint64_t time, uint64_t maj_pf, uint64_t min_pf){
   if(tlsPtr_.timer_data_ptr != nullptr){
     *tlsPtr_.timer_data_ptr ++ = generic_timer_count();
     *tlsPtr_.timer_data_ptr ++ = time;
+    *tlsPtr_.timer_data_ptr ++ = maj_pf;
+    *tlsPtr_.timer_data_ptr ++ = min_pf;
   } else {
     LOG(INFO) << "nanoscope: wrong thread" << "\n";
   }

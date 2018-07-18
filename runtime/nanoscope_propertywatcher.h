@@ -40,17 +40,7 @@
 
 #if defined(__ANDROID__)
 #include <linux/perf_event.h>
-#include <fcntl.h>
 #include <sys/ioctl.h>
-#include <asm/unistd.h>
-#include <time.h>
-static int perf_event_open(const perf_event_attr& attr, pid_t pid, int cpu,
-                           int group_fd, unsigned long flags) {  // NOLINT
-  return syscall(__NR_perf_event_open, &attr, pid, cpu, group_fd, flags);
-}
-#include <linux/unistd.h>
-#include <signal.h>
-#include <time.h>
 #endif
 
 // #define SIGTIMER (SIGRTMIN + 3)
@@ -60,6 +50,15 @@ static int perf_event_open(const perf_event_attr& attr, pid_t pid, int cpu,
 namespace art {
 
 static const unsigned long PERF_PAGE_SIZE = sysconf(_SC_PAGESIZE);
+
+struct read_format {
+  uint64_t nr;
+  struct {
+    uint64_t value;
+    uint64_t id;
+  } values[];
+};
+
 class RingBuffer {
   private:
     const char* _start;
@@ -114,15 +113,18 @@ class NanoscopePropertyWatcher {
 
   std::string output_path;
 #if defined(__ANDROID__)
-  static int fd;                       // perf_fd
+  int64_t interval = 1000000;  // 1 ms
+  static int fd;                       // fd for timer
+  // static uint64_t id;                  // event id for timer
   static struct perf_event_mmap_page* page;
   timer_t timerid;
+  static int sample_fd[2];             // fd for samples
 #endif
 
   explicit NanoscopePropertyWatcher(Thread* t, std::string _package_name) : to_trace(t), package_name(_package_name) {}
 
   void watch() {
-    refresh_state(Thread::Current());
+    // refresh_state(Thread::Current());
     std::string thread_name = "nanoscope-propertywatcher:" + package_name;
 
     NanoscopePropertyWatcher* watcher = this;
@@ -191,132 +193,14 @@ class NanoscopePropertyWatcher {
     return std::string(buffer);
   }
 
+
 #if defined(__ANDROID__)
-  static void signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo ATTRIBUTE_UNUSED, void *ucontext ATTRIBUTE_UNUSED) {
-    // if (fd != siginfo -> si_fd) {
-    //   LOG(ERROR) << "nanoscope: Sanity check fails: perf fd should be the same";
-    //   return;
-    // }
-    // LOG(INFO) << "nanoscope: entering sig handler";
-    // if(page != NULL){
-    //   uint64_t tail = page->data_tail;
-    //   uint64_t head = page->data_head;
-    //   // asm volatile("dmb ish" : : : "memory");   //flush ring buffer
-
-    //   RingBuffer ring(page);
-
-    //   while (tail < head) {
-    //     struct perf_event_header* hdr = ring.seek(tail);
-    //     if (hdr->type == PERF_RECORD_SAMPLE) {
-    //       uint64_t time = ring.next();
-    //       traced->TimerHandler(time);
-    //     }
-    //     tail += hdr->size;
-    //   }
-
-    //   page->data_tail = head;
-    // }
-    struct timespec thread_cpu_time;
-    if(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &thread_cpu_time) < 0){
-      LOG(ERROR) << "nanoscope: error get clock time";
-    }
-    traced -> TimerHandler(thread_cpu_time.tv_sec * 1e+9 + thread_cpu_time.tv_nsec);
-    ioctl(fd, PERF_EVENT_IOC_RESET, 0);
-    ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
-  }
-
-  static void signal_handler_timer(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo ATTRIBUTE_UNUSED, void *ucontext ATTRIBUTE_UNUSED) {
-    struct timespec thread_cpu_time;
-    if(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &thread_cpu_time) < 0){
-      LOG(ERROR) << "nanoscope: error get clock time";
-    }
-    traced -> TimerHandler(thread_cpu_time.tv_sec * 1e+9 + thread_cpu_time.tv_nsec);
-  }
-
-  void install_sig_handler() {
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(struct sigaction));
-    if(use_perf)
-      sa.sa_sigaction = signal_handler;
-    else
-      sa.sa_sigaction = signal_handler_timer;
-    sa.sa_flags = SA_RESTART | SA_SIGINFO;
-    if (sigaction(SIGTIMER, &sa, NULL) < 0) {
-      LOG(ERROR) << "nanoscope: Error setting up signal handler.";
-      return;
-    }
-    LOG(INFO) << "nanoscope: set up sig handler for SIGTIMER";
-  }
+  static void signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo ATTRIBUTE_UNUSED, void *ucontext ATTRIBUTE_UNUSED);
+  static void signal_handler_timer(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo ATTRIBUTE_UNUSED, void *ucontext ATTRIBUTE_UNUSED);
+  void install_sig_handler();
+  void set_up_counter(int sample_index, int groupfd, uint32_t type, uint64_t config);
 #endif
-
-
-  void setup_timer(){
-#if defined(__ANDROID__)
-    if(use_perf){
-      LOG(INFO) << "nanoscope: start_tracing for thread " << to_trace -> GetTid();
-      install_sig_handler();
-      int64_t interval = 1000000;  // 1 ms
-      // singal timer setup
-      struct perf_event_attr pe;
-      memset(&pe, 0, sizeof(struct perf_event_attr));
-      pe.type = PERF_TYPE_SOFTWARE;
-      pe.size = sizeof(struct perf_event_attr);
-      pe.config = PERF_COUNT_SW_CPU_CLOCK;
-      pe.sample_period = interval;
-      pe.sample_type = PERF_SAMPLE_TIME;
-      pe.read_format = PERF_FORMAT_GROUP|PERF_FORMAT_ID;
-      pe.disabled = 1;
-      pe.pinned = 1;
-      // pe.exclude_kernel = 1;
-      // pe.exclude_hv = 1;
-      // pe.exclude_idle = 1;
-      pe.wakeup_events = 1;
-      // fd = perf_event_open(pe, traced->GetTid(), -1, -1, 0);
-      fd = perf_event_open(pe, -1, 0, -1, 0);
-      if (fd < 0) {
-        LOG(ERROR) << "nanoscope: Fail to open perf event file ";
-        LOG(ERROR) << "nanoscope: " << strerror(errno);
-        return;
-      }
-
-      void* p = mmap(NULL, (1+1)*PERF_PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-      page = (struct perf_event_mmap_page*)p;
-      fcntl(fd, F_SETFL, O_ASYNC);
-      fcntl(fd, F_SETSIG, SIGTIMER);
-
-      // Deliver the signal to the thread
-      struct f_owner_ex fown_ex;
-      fown_ex.type = F_OWNER_TID;
-      fown_ex.pid  = traced->GetTid();
-      int ret = fcntl(fd, F_SETOWN_EX, &fown_ex);
-      if (ret == -1) {
-        LOG(ERROR) << "nanoscope: Failed to set the owner of the perf event file";
-        return;
-      }
-      ioctl(fd, PERF_EVENT_IOC_RESET, 0);
-      ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
-    } else {
-      install_sig_handler();
-      struct sigevent sev;
-      struct itimerspec its;
-      long long freq_nanosecs;
-      sev.sigev_notify = SIGEV_THREAD_ID;
-      sev.sigev_signo = SIGTIMER;
-      sev.sigev_notify_thread_id = traced -> GetTid();
-      sev.sigev_value.sival_ptr = &timerid;
-      if (timer_create(CLOCK_THREAD_CPUTIME_ID, &sev, &timerid) == -1)
-        LOG(ERROR) << "nanoscope: Failed to create timer";;
-      freq_nanosecs = 100000000;   // 1ms
-      its.it_value.tv_sec = freq_nanosecs / 1000000000;
-      its.it_value.tv_nsec = freq_nanosecs % 1000000000;
-      its.it_interval.tv_sec = its.it_value.tv_sec;
-      its.it_interval.tv_nsec = its.it_value.tv_nsec;
-
-      if (timer_settime(timerid, 0, &its, NULL) == -1)
-        LOG(ERROR) << "nanoscope: Failed to set timer";;
-    }
-#endif
-  }
+  void setup_timer();
 
   void start_tracing(Thread* self, std::string _output_path) {
     // nanoscope tracing
@@ -326,9 +210,14 @@ class NanoscopePropertyWatcher {
     Locks::mutator_lock_->SharedLock(self);
     traced->StartTracing();
     Locks::mutator_lock_->SharedUnlock(self);
-
+#if defined(__ANDROID__)
     setup_timer();
-
+    set_up_counter(0, -1, PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MAJ);
+    set_up_counter(1, sample_fd[0], PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MIN);
+    ioctl(fd, PERF_EVENT_IOC_RESET, 0);
+    ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
+    ioctl(sample_fd[0], PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
+#endif
   }
 
   void stop_tracing(Thread* self) {
@@ -343,6 +232,11 @@ class NanoscopePropertyWatcher {
       fd = 0;
       munmap(page, 2 * PERF_PAGE_SIZE);
       page = NULL;
+      ioctl(sample_fd[0], PERF_EVENT_IOC_DISABLE, 0);
+      for(int i = 0; i < 2; i++){
+        close(sample_fd[i]);
+        sample_fd[i] = 0;
+      }
     } else {
       timer_delete(timerid);
     }
@@ -350,9 +244,7 @@ class NanoscopePropertyWatcher {
     Locks::mutator_lock_->SharedLock(self);
     traced->StopTracing(output_path);
     Locks::mutator_lock_->SharedUnlock(self);
-
     output_path = "";
-
   }
 };
 
