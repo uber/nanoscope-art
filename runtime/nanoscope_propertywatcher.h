@@ -47,6 +47,8 @@
 #define SIGTIMER (SIGPROF)
 // #define SIGTIMER (SIGIO)
 
+#define NUM_COUNTER 3
+
 namespace art {
 
 static const unsigned long PERF_PAGE_SIZE = sysconf(_SC_PAGESIZE);
@@ -118,7 +120,7 @@ class NanoscopePropertyWatcher {
   // static uint64_t id;                  // event id for timer
   static struct perf_event_mmap_page* page;
   timer_t timerid;
-  static int sample_fd[2];             // fd for samples
+  static int sample_fd[NUM_COUNTER];             // fd for samples
 #endif
 
   explicit NanoscopePropertyWatcher(Thread* t, std::string _package_name) : to_trace(t), package_name(_package_name) {}
@@ -216,8 +218,10 @@ class NanoscopePropertyWatcher {
     setup_timer();
     set_up_counter(0, -1, PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MAJ);
     set_up_counter(1, sample_fd[0], PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MIN);
+    set_up_counter(2, sample_fd[0], PERF_TYPE_SOFTWARE, PERF_COUNT_SW_CONTEXT_SWITCHES);
     ioctl(fd, PERF_EVENT_IOC_RESET, 0);
     ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
+    ioctl(sample_fd[0], PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
     ioctl(sample_fd[0], PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
 #endif
   }
@@ -235,7 +239,7 @@ class NanoscopePropertyWatcher {
       munmap(page, 2 * PERF_PAGE_SIZE);
       page = NULL;
       ioctl(sample_fd[0], PERF_EVENT_IOC_DISABLE, 0);
-      for(int i = 0; i < 2; i++){
+      for(int i = 0; i < NUM_COUNTER; i++){
         close(sample_fd[i]);
         sample_fd[i] = 0;
       }

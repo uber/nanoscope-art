@@ -218,7 +218,8 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
       uint64_t signal_time = reinterpret_cast<uint64_t>(*timer_ptr++);
       uint64_t maj_pf = reinterpret_cast<uint64_t>(*timer_ptr++);
       uint64_t min_pf = reinterpret_cast<uint64_t>(*timer_ptr++);
-      out2 << timestamp << ", " << signal_time << ", " << maj_pf << ", " << min_pf << "\n";
+      uint64_t ctx_swtich = reinterpret_cast<uint64_t>(*timer_ptr++);
+      out2 << timestamp << ", " << signal_time << ", " << maj_pf << ", " << min_pf << ", " << ctx_swtich << "\n";
     }
     std::rename(out_path_tmp.c_str(), out_path.c_str());
   } else {
@@ -320,12 +321,13 @@ void Thread::StopTracing(std::string out_path) {
   }
 }
 
-void Thread::TimerHandler(uint64_t time, uint64_t maj_pf, uint64_t min_pf){
+void Thread::TimerHandler(uint64_t time, uint64_t maj_pf, uint64_t min_pf, uint64_t ctx_swtich){
   if(tlsPtr_.timer_data_ptr != nullptr){
     *tlsPtr_.timer_data_ptr ++ = generic_timer_count();
     *tlsPtr_.timer_data_ptr ++ = time;
     *tlsPtr_.timer_data_ptr ++ = maj_pf;
     *tlsPtr_.timer_data_ptr ++ = min_pf;
+    *tlsPtr_.timer_data_ptr ++ = ctx_swtich;
   } else {
     LOG(INFO) << "nanoscope: wrong thread" << "\n";
   }

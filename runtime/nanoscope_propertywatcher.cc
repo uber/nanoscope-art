@@ -17,7 +17,7 @@ static int perf_event_open(const perf_event_attr& attr, pid_t pid, int cpu,
 art::Thread* art::NanoscopePropertyWatcher::traced = NULL;
 #if defined(__ANDROID__)
 int art::NanoscopePropertyWatcher::fd = -1;
-int art::NanoscopePropertyWatcher::sample_fd [] = {-1, -1};
+int art::NanoscopePropertyWatcher::sample_fd [] = { [0 ... (NUM_COUNTER - 1)] = -1 };
 // uint64_t art::NanoscopePropertyWatcher::id = -1;
 // uint64_t art::NanoscopePropertyWatcher::id2 = -1;
 struct perf_event_mmap_page* art::NanoscopePropertyWatcher::page = NULL;
@@ -112,16 +112,16 @@ namespace art{
     char buf[4096];
     struct read_format* rf = (struct read_format*) buf;
     read(sample_fd[0], buf, sizeof(buf));
-    uint64_t val1, val2 = 0;
-    // Hardcode index here since we only have two
-    val1 = rf->values[0].value;
-    val2 = rf->values[1].value;
+    uint64_t vals[NUM_COUNTER] = {0};
+    for(int i = 0; i < NUM_COUNTER; i++){
+      vals[i] = rf->values[i].value;
+    }
 
     struct timespec thread_cpu_time;
     if(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &thread_cpu_time) < 0){
       LOG(ERROR) << "nanoscope: error get clock time";
     }
-    traced -> TimerHandler(thread_cpu_time.tv_sec * 1e+9 + thread_cpu_time.tv_nsec, val1, val2);
+    traced -> TimerHandler(thread_cpu_time.tv_sec * 1e+9 + thread_cpu_time.tv_nsec, vals[0], vals[1], vals[2]);
     ioctl(fd, PERF_EVENT_IOC_RESET, 0);
     ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
   }
