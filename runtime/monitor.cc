@@ -880,6 +880,10 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
         if (h_obj->CasLockWordWeakSequentiallyConsistent(lock_word, thin_locked)) {
           AtraceMonitorLock(self, h_obj.Get(), false /* is_wait */);
           // CasLockWord enforces more than the acquire ordering we need here.
+          if(contention_count != 0){
+            uint64_t ts = generic_timer_count();
+            // LOG(INFO) << "[" << thread_id <<"] " << ts << ": LOCK_GET, THIN-CONTENTION, obj " << obj;
+          }
           return h_obj.Get();  // Success!
         }
         continue;  // Go again.
@@ -913,6 +917,10 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
             return nullptr;
           }
           // Contention.
+          if(contention_count == 0){
+            uint64_t ts = generic_timer_count();
+            // LOG(INFO) << "[" << thread_id <<"] " << ts << ": LOCK_ACQUIRE, THIN-CONTENTION, owner tid " << owner_thread_id << ", obj " << obj;
+          }
           contention_count++;
           Runtime* runtime = Runtime::Current();
           if (contention_count <= runtime->GetMaxSpinsBeforeThinkLockInflation()) {
@@ -923,6 +931,8 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
             sched_yield();
           } else {
             contention_count = 0;
+            uint64_t ts = generic_timer_count();
+            // LOG(INFO) << "[" << thread_id << "] " << ts <<": LOCK_INFLATE, CONTENTION, owner tid " << owner_thread_id << ", obj " << obj;
             InflateThinLocked(self, h_obj, lock_word, 0);
           }
         }
@@ -933,14 +943,22 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
         if (trylock) {
           return mon->TryLock(self) ? h_obj.Get() : nullptr;
         } else {
+          uint32_t owner_thread_id  = mon->GetOwnerThreadId();
+          uint64_t ts = generic_timer_count();
+          // LOG(INFO) << "[" << thread_id << "] " << ts <<": LOCK_ACQUIRE, FAT, owner tid " << owner_thread_id << ", obj " << obj;
           mon->Lock(self);
+          ts = generic_timer_count();
+          // LOG(INFO) << "[" << thread_id <<"] " << ts << ": LOCK_GET, FAT, obj " << obj;
           return h_obj.Get();  // Success!
         }
       }
-      case LockWord::kHashCode:
+      case LockWord::kHashCode: {
         // Inflate with the existing hashcode.
+        uint64_t ts = generic_timer_count();
+        // LOG(INFO) << "[" << thread_id << "] " << ts <<": LOCK_INFLATE, HASH, obj " << obj;
         Inflate(self, nullptr, h_obj.Get(), lock_word.GetHashCode());
         continue;  // Start from the beginning.
+      }
       default: {
         LOG(FATAL) << "Invalid monitor state " << lock_word.GetState();
         UNREACHABLE();

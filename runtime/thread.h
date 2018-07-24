@@ -43,6 +43,7 @@
 #include "runtime_stats.h"
 #include "stack.h"
 #include "thread_state.h"
+#include "utils.h"
 
 class BacktraceMap;
 

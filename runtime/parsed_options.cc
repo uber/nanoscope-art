@@ -421,7 +421,7 @@ static void MaybeOverrideVerbosity() {
   //  gLogVerbosity.simulator = true; // TODO: don't check this in!
   //  gLogVerbosity.startup = true;  // TODO: don't check this in!
   //  gLogVerbosity.third_party_jni = true;  // TODO: don't check this in!
-  //  gLogVerbosity.threads = true;  // TODO: don't check this in!
+   // gLogVerbosity.threads = true;  // TODO: don't check this in!
   //  gLogVerbosity.verifier = true;  // TODO: don't check this in!
 }
 
