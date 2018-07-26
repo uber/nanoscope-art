@@ -118,11 +118,11 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
 
   uint64_t first_timestamp = 0;
   uint64_t* timer_ptr = timer_data;
-  if(ptr < end && timer_ptr < timer_end){
-    uint64_t first_timer_ts = reinterpret_cast<uint64_t>(*timer_ptr);
-    first_timestamp = first_timer_ts;
-  }
-  LOG(INFO) << "nanoscope: first ts:" << first_timestamp;
+  // if(ptr < end && timer_ptr < timer_end){
+  //   uint64_t first_timer_ts = reinterpret_cast<uint64_t>(*timer_ptr);
+  //   first_timestamp = first_timer_ts;
+  // }
+  // LOG(INFO) << "nanoscope: first ts:" << first_timestamp;
   if (out.is_open()) {
     while (ptr < end) {
       ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
@@ -145,7 +145,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
         }
       }
       int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
-      if((uint64_t) timestamp< first_timestamp)  first_timestamp = timestamp;
+      // if((uint64_t) timestamp< first_timestamp)  first_timestamp = timestamp;
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
       out << timestamp << ":" << pretty_method << "\n";
     }
@@ -1061,6 +1061,7 @@ void Thread::SetThreadName(const char* name) {
     return;
   }
   tlsPtr_.name->assign(name);
+  LOG(INFO) << "NAME: " << GetTid() << "," << name << std::endl;
   ::art::SetThreadName(name);
   Dbg::DdmSendThreadNotification(this, CHUNK_TYPE("THNM"));
 }

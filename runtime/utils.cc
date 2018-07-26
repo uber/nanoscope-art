@@ -1919,6 +1919,13 @@ uint64_t ALWAYS_INLINE generic_timer_count() {
   return t;
 }
 
+uint64_t ALWAYS_INLINE generic_timer_ts() {
+  uint64_t ts = generic_timer_count();
+  uint64_t timer_ticks_per_second = ticks_per_second();
+  uint64_t seconds_to_nanoseconds = 1000000000;
+  return ts * seconds_to_nanoseconds / timer_ticks_per_second;
+}
+
 #if defined(__i386)
 // This method calculates ticks per second by comparing the built-in clock time to timer count. We call this
 // only once right before converting all trace timestamps, so this will produce inaccurate results if the
