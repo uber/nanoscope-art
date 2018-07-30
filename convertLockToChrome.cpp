@@ -149,7 +149,10 @@ int main(int argc, char *argv[]){
 		switch(s){
 			case IDLE:
 				if(action == "LOCK_ACQUIRE"){
-					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"B\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\" } }";
+					string location;
+					iss >> dc;
+					getline(iss, location);
+					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"B\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\", \"location\":\"" << location << "\" } }";
 					if(type == "THIN")	s = WAIT_THIN;
 					else if (type == "FAT") s = WAIT_FAT;
 					else 	assertf(false, "wrong type");
@@ -175,8 +178,11 @@ int main(int argc, char *argv[]){
 					} else {
 						assertf(false, "wrong type %s", type.c_str());
 					}
+					string location;
+					iss >> dc;
+					getline(iss, location);
 					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"E\" }," << endl;
-					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"B\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\" } }";
+					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"B\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\", \"location\":\"" << location << "\" } }";
 				} else if(action == "LOCK_GET"){
 					assertf(type == "THIN", "can only get THIN when wait for THIN");
 					s = IDLE;
