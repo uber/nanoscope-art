@@ -626,6 +626,7 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
 
   uint64_t tid = self->GetTid();
   mirror::Object* obj = GetObject();
+  pid_t tracePid = Runtime::Current()->LockLogPid();
 
   bool was_interrupted = false;
   {
@@ -652,8 +653,10 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
       was_interrupted = true;
     } else {
       // Wait for a notification or a timeout to occur.
-      uint64_t ts = generic_timer_ts();
-      LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_WAIT,START," << obj << ",-1";
+      if(tracePid != -1 && getpid() == tracePid){
+        uint64_t ts = generic_timer_ts();
+        LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_WAIT,START," << obj << ",-1";
+      }
       if (why == kWaiting) {
         self->GetWaitConditionVariable()->Wait(self);
       } else {
@@ -695,8 +698,10 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
   AtraceMonitorUnlock();  // End Wait().
 
   // Re-acquire the monitor and lock.
-  uint64_t ts = generic_timer_ts();
-  LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_WAIT,END," << obj << ",-1";
+  if(tracePid != -1 && getpid() == tracePid){
+    uint64_t ts = generic_timer_ts();
+    LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_WAIT,END," << obj << ",-1";
+  }
   Lock(self);
   monitor_lock_.Lock(self);
   self->GetWaitMutex()->AssertNotHeld(self);
@@ -787,15 +792,15 @@ bool Monitor::Deflate(Thread* self, mirror::Object* obj) {
       obj->SetLockWord(new_lw, false);
       VLOG(monitor) << "Deflated " << obj << " to thin lock " << owner->GetTid() << " / "
           << monitor->lock_count_;
-      uint32_t ts = generic_timer_ts();
-      LOG(INFO) << "[" << self->GetTid() <<"] " << ts <<":LOCK_DEFLATE,TOTHIN," << obj << "," << owner->GetTid();
+      // uint32_t ts = generic_timer_ts();
+      // LOG(INFO) << "[" << self->GetTid() <<"] " << ts <<":LOCK_DEFLATE,TOTHIN," << obj << "," << owner->GetTid();
     } else if (monitor->HasHashCode()) {
       LockWord new_lw = LockWord::FromHashCode(monitor->GetHashCode(), lw.ReadBarrierState());
       // Assume no concurrent read barrier state changes as mutators are suspended.
       obj->SetLockWord(new_lw, false);
       VLOG(monitor) << "Deflated " << obj << " to hash monitor " << monitor->GetHashCode();
-      uint32_t ts = generic_timer_ts();
-      LOG(INFO) << "[" << self->GetTid() <<"] " << ts <<": LOCK_DEFLATE,TOHASH," << obj << "," << owner->GetTid();
+      // uint32_t ts = generic_timer_ts();
+      // LOG(INFO) << "[" << self->GetTid() <<"] " << ts <<": LOCK_DEFLATE,TOHASH," << obj << "," << owner->GetTid();
 
     } else {
       // No lock and no hash, just put an empty lock word inside the object.
@@ -803,8 +808,8 @@ bool Monitor::Deflate(Thread* self, mirror::Object* obj) {
       // Assume no concurrent read barrier state changes as mutators are suspended.
       obj->SetLockWord(new_lw, false);
       VLOG(monitor) << "Deflated" << obj << " to empty lock word";
-      uint32_t ts = generic_timer_ts();
-      LOG(INFO) << "[" << self->GetTid() <<"] " << ts <<": LOCK_DEFLATE,TOEMPTY," << obj << "," << owner->GetTid();
+      // uint32_t ts = generic_timer_ts();
+      // LOG(INFO) << "[" << self->GetTid() <<"] " << ts <<": LOCK_DEFLATE,TOEMPTY," << obj << "," << owner->GetTid();
 
     }
     // The monitor is deflated, mark the object as null so that we know to delete it during the
@@ -839,11 +844,14 @@ void Monitor::InflateThinLocked(Thread* self, Handle<mirror::Object> obj, LockWo
                                 uint32_t hash_code) {
   DCHECK_EQ(lock_word.GetState(), LockWord::kThinLocked);
   uint32_t owner_thread_id = lock_word.ThinLockOwner();
+  pid_t tracePid = Runtime::Current()->LockLogPid();
   if (owner_thread_id == self->GetThreadId()) {
     // We own the monitor, we can easily inflate it.
-    uint64_t tid = self->GetTid();
-    uint64_t ts = generic_timer_ts();
-    LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_INFLATE,RECURSION," << obj.Get() << "," << owner_thread_id;
+    if(tracePid != -1 && getpid() == tracePid){
+      uint64_t tid = self->GetTid();
+      uint64_t ts = generic_timer_ts();
+      LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_INFLATE,RECURSION," << obj.Get() << "," << owner_thread_id;
+    }
     Inflate(self, self, obj.Get(), hash_code);
   } else {
     ThreadList* thread_list = Runtime::Current()->GetThreadList();
@@ -861,9 +869,11 @@ void Monitor::InflateThinLocked(Thread* self, Handle<mirror::Object> obj, LockWo
       if (lock_word.GetState() == LockWord::kThinLocked &&
           lock_word.ThinLockOwner() == owner_thread_id) {
         // Go ahead and inflate the lock.
-        uint64_t tid = self->GetTid();
-        uint64_t ts = generic_timer_ts();
-        LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_INFLATE,CONTENTION," << obj.Get() << "," << owner_thread_id;
+        if(tracePid != -1 && getpid() == tracePid){
+          uint64_t tid = self->GetTid();
+          uint64_t ts = generic_timer_ts();
+          LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_INFLATE,CONTENTION," << obj.Get() << "," << owner_thread_id;
+        }
         Inflate(self, owner, obj.Get(), hash_code);
       }
       thread_list->Resume(owner, false);
@@ -894,6 +904,7 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
   size_t contention_count = 0;
   StackHandleScope<1> hs(self);
   Handle<mirror::Object> h_obj(hs.NewHandle(obj));
+  pid_t tracePid = Runtime::Current()->LockLogPid();
   while (true) {
     LockWord lock_word = h_obj->GetLockWord(true);
     switch (lock_word.GetState()) {
@@ -902,7 +913,7 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
         if (h_obj->CasLockWordWeakSequentiallyConsistent(lock_word, thin_locked)) {
           AtraceMonitorLock(self, h_obj.Get(), false /* is_wait */);
           // CasLockWord enforces more than the acquire ordering we need here.
-          if(contention_count != 0){
+          if(tracePid != -1 && getpid() == tracePid && contention_count != 0){
             uint64_t ts = generic_timer_ts();
             LOG(INFO) << "[" << tid <<"] " << ts << ":LOCK_GET,THIN," << obj << ",-1";
           }
@@ -941,7 +952,7 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
             return nullptr;
           }
           // Contention.
-          if(contention_count == 0){
+          if(tracePid != -1 && getpid() == tracePid && contention_count == 0){
             uint64_t ts = generic_timer_ts();
             LOG(INFO) << "[" << tid <<"] " << ts << ":LOCK_ACQUIRE,THIN," << obj << "," << owner_thread_id;
           }
@@ -965,19 +976,26 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
         if (trylock) {
           return mon->TryLock(self) ? h_obj.Get() : nullptr;
         } else {
-          uint32_t owner_thread_id  = mon->GetOwnerThreadId();
-          uint64_t ts = generic_timer_ts();
-          LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_ACQUIRE,FAT,"<< obj << "," << owner_thread_id;
-          mon->Lock(self);
-          ts = generic_timer_ts();
-          LOG(INFO) << "[" << tid <<"] " << ts << ":LOCK_GET,FAT," << obj << ",-1";
-          return h_obj.Get();  // Success!
+          if(tracePid != -1 && getpid() == tracePid){
+            uint32_t owner_thread_id  = mon->GetOwnerThreadId();
+            uint64_t ts = generic_timer_ts();
+            LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_ACQUIRE,FAT,"<< obj << "," << owner_thread_id;
+            mon->Lock(self);
+            ts = generic_timer_ts();
+            LOG(INFO) << "[" << tid <<"] " << ts << ":LOCK_GET,FAT," << obj << ",-1";
+            return h_obj.Get();  // Success!
+          } else {
+            mon->Lock(self);
+            return h_obj.Get();  // Success!
+          }
         }
       }
       case LockWord::kHashCode: {
         // Inflate with the existing hashcode.
-        uint64_t ts = generic_timer_ts();
-        LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_INFLATE,HASH," << obj << ",-1";
+        if(tracePid != -1 && getpid() == tracePid){
+          uint64_t ts = generic_timer_ts();
+          LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_INFLATE,HASH," << obj << ",-1";
+        }
         Inflate(self, nullptr, h_obj.Get(), lock_word.GetHashCode());
         continue;  // Start from the beginning.
       }
@@ -1069,9 +1087,12 @@ void Monitor::Wait(Thread* self, mirror::Object *obj, int64_t ms, int32_t ns,
         } else {
           // We own the lock, inflate to enqueue ourself on the Monitor. May fail spuriously so
           // re-load.
-          uint64_t tid = self->GetTid();
-          uint64_t ts = generic_timer_ts();
-          LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_INFLATE,WAIT," << obj << "," << owner_thread_id;
+          pid_t tracePid = Runtime::Current()->LockLogPid();
+          if(tracePid != -1 && getpid() == tracePid){
+            uint64_t tid = self->GetTid();
+            uint64_t ts = generic_timer_ts();
+            LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_INFLATE,WAIT," << obj << "," << owner_thread_id;
+          }
           Inflate(self, self, obj, 0);
           lock_word = obj->GetLockWord(true);
         }

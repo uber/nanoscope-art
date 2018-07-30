@@ -20,6 +20,7 @@
 #include "base/mutex.h"
 #include "thread.h"
 #include "utils.h"
+#include "runtime.h"
 #include <sstream>
 #include <string.h>
 #include <stdio.h>
@@ -224,6 +225,8 @@ class NanoscopePropertyWatcher {
     ioctl(sample_fd[0], PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
     ioctl(sample_fd[0], PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
 #endif
+    LOG(INFO) << "nanoscope: set log pid " << traced -> GetTid();
+    Runtime::Current()->SetLockLogPid(traced->GetTid());
   }
 
   void stop_tracing(Thread* self) {
@@ -251,6 +254,7 @@ class NanoscopePropertyWatcher {
     traced->StopTracing(output_path);
     Locks::mutator_lock_->SharedUnlock(self);
     output_path = "";
+    Runtime::Current()->SetLockLogPid(-1);
   }
 };
 
