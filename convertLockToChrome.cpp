@@ -107,15 +107,11 @@ int main(int argc, char *argv[]){
 	string pids = argv[1];
 	string filename = pids + ".lock";
 	int pid = stoi(pids);
+	int processed_tid = -1;
 	ifstream inFile(filename);
-	string ds, line, action, type;
-	string obj;
-	int tid, owner_tid, processed_tid = -1;
-	long ts;
-	char dc;
-	string retType, name;
 	bool comma = false;
 	State s = IDLE;
+	string line;
 
 	ofstream outFile("lock.json");
 	outFile << "{" << endl << "\"traceEvents\": [" << endl;
@@ -123,11 +119,19 @@ int main(int argc, char *argv[]){
 	map<int, vector<Entry> > perThreadEntries;
 	while (getline(inFile, line)){
 		istringstream iss(line);
+		string ds, action, type;
+		string obj;
+		int tid, owner_tid;
+		long ts;
+		char dc;
+		string retType, name;
 		iss >> ds >> ds >> ds >> ds >> ds >> ds >> ds >> dc >> tid >> dc >> ts >> dc;
 		getline(iss, action, ',');
 		getline(iss, type, ',');
 		getline(iss, obj, ',');
 		iss >> owner_tid;
+
+		// cout << line << endl;
 
 		if(processed_tid == -1)	processed_tid = tid;
 		if(tid != processed_tid){
@@ -188,10 +192,10 @@ int main(int argc, char *argv[]){
 					s = IDLE;
 					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"E\" }";
 				} else if(action == "LOCK_INFLATE"){
-					assertf(type == "CONTENTION" || type == "WAIT", "inflate lock when WAIT_THIN must be CONTENTION");
+					assertf(type == "CONTENTION" || type == "WAIT" || type == "HASH", "inflate lock when WAIT_THIN must be CONTENTION, obj %s", obj.c_str());
 					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"i\", \"name\":\"" << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\" } }";
 				} else {
-					assertf(false, "wrong ACTION %s", action.c_str());
+					assertf(false, "wrong ACTION %s, obj %s", action.c_str(), obj.c_str());
 				}
 				break;
 			case WAIT_FAT:
