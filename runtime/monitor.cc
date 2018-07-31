@@ -953,8 +953,14 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
           }
           // Contention.
           if(tracePid != -1 && getpid() == tracePid && contention_count == 0){
+            uint32_t pc;
+            ArtMethod* m = self->GetCurrentMethod(&pc);
+            const char* filename;
+            int32_t line_number;
+            TranslateLocation(m, pc, &filename, &line_number);
             uint64_t ts = generic_timer_ts();
-            LOG(INFO) << "[" << tid <<"] " << ts << ":LOCK_ACQUIRE,THIN," << obj << "," << owner_thread_id;
+            LOG(INFO) << "[" << tid <<"] " << ts << ":LOCK_ACQUIRE,THIN," << obj << "," << owner_thread_id << "," << "(" << (filename != nullptr ? filename : "null") << ":"
+            << line_number << ")";
           }
           contention_count++;
           Runtime* runtime = Runtime::Current();
@@ -977,9 +983,15 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
           return mon->TryLock(self) ? h_obj.Get() : nullptr;
         } else {
           if(tracePid != -1 && getpid() == tracePid){
+            uint32_t pc;
+            ArtMethod* m = self->GetCurrentMethod(&pc);
+            const char* filename;
+            int32_t line_number;
+            TranslateLocation(m, pc, &filename, &line_number);
             uint32_t owner_thread_id  = mon->GetOwnerThreadId();
             uint64_t ts = generic_timer_ts();
-            LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_ACQUIRE,FAT,"<< obj << "," << owner_thread_id;
+            LOG(INFO) << "[" << tid << "] " << ts <<":LOCK_ACQUIRE,FAT,"<< obj << "," << owner_thread_id << "," << "(" << (filename != nullptr ? filename : "null") << ":"
+            << line_number << ")";
             mon->Lock(self);
             ts = generic_timer_ts();
             LOG(INFO) << "[" << tid <<"] " << ts << ":LOCK_GET,FAT," << obj << ",-1";
