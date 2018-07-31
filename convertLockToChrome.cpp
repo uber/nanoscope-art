@@ -112,6 +112,12 @@ int main(int argc, char *argv[]){
 	bool comma = false;
 	State s = IDLE;
 	string line;
+	string ds, action, type;
+	string obj;
+	int tid, owner_tid;
+	long ts;
+	char dc;
+	string retType, name;
 
 	ofstream outFile("lock.json");
 	outFile << "{" << endl << "\"traceEvents\": [" << endl;
@@ -119,12 +125,6 @@ int main(int argc, char *argv[]){
 	map<int, vector<Entry> > perThreadEntries;
 	while (getline(inFile, line)){
 		istringstream iss(line);
-		string ds, action, type;
-		string obj;
-		int tid, owner_tid;
-		long ts;
-		char dc;
-		string retType, name;
 		iss >> ds >> ds >> ds >> ds >> ds >> ds >> ds >> dc >> tid >> dc >> ts >> dc;
 		getline(iss, action, ',');
 		getline(iss, type, ',');
@@ -215,10 +215,23 @@ int main(int argc, char *argv[]){
 			default:
 				assertf(false, "wrong state %d", s);
 		}
-
-
 	}
 	inFile.close();
+
+	ifstream inFile2(pids + ".name");
+	while (getline(inFile2, line)){
+		istringstream iss(line);
+		iss >> ds >> ds >> ds >> ds >> ds >> ds >> dc >> ds >> tid >> dc;
+		string name;
+		getline(iss, name);
+		outFile << "," << endl;
+		outFile << "{ \"name\":\"thread_name\", \"pid\":" << pid << " , \"tid\":" << tid << ", \"ph\":\"M\", \"args\":{ \"name\":\"" << tid << "-" << name << "\" } }";
+	}
+	outFile << "," << endl;
+	outFile << "{ \"name\":\"thread_name\", \"pid\":" << pid << " , \"tid\":" << pid << ", \"ph\":\"M\", \"args\":{ \"name\":\"" << pid << "-main\" } }";
+
+
+	inFile2.close();
 
 	outFile << endl << "]," << endl << "\"displayTimeUnit\":\"ns\"," << endl << "\"meta_user\": \"uber\"," << endl <<  "\"meta_cpu\": \"2\"" << endl << "}";
 
