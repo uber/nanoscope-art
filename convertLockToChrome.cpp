@@ -113,9 +113,9 @@ int main(int argc, char *argv[]){
 	State s = IDLE;
 	string line;
 	string ds, action, type;
-	string obj;
+	string obj, enter, exit;
 	int tid, owner_tid;
-	long ts;
+	long ts, duration;
 	char dc;
 	string retType, name;
 
@@ -125,96 +125,114 @@ int main(int argc, char *argv[]){
 	map<int, vector<Entry> > perThreadEntries;
 	while (getline(inFile, line)){
 		istringstream iss(line);
-		iss >> ds >> ds >> ds >> ds >> ds >> ds >> ds >> dc >> tid >> dc >> ts >> dc;
-		getline(iss, action, ',');
-		getline(iss, type, ',');
-		getline(iss, obj, ',');
-		iss >> owner_tid;
-
-		// cout << line << endl;
-
-		if(processed_tid == -1)	processed_tid = tid;
-		if(tid != processed_tid){
-			processed_tid = tid;
-			s = IDLE;
-		}
-		// tid >> dc >> ts >> dc >> a >> dc >> t >> dc >> hex >> obj >> dec >> dc >> owner_tid;
-		// Entry e(ts, tid, a, t, obj, owner_tid);
-		// e.pretty_print(cout);
-		// perThreadEntries[tid].push_back(e);
-		if(!comma){
-			comma = true;
+		iss >> ds >> ds >> ds >> ds >> ds >> ds >> ds;
+		getline(iss, action, ':');
+		iss >> tid >> dc >> ts >> dc;
+		if(action == " LOCK_ACQUIRE"){
+			iss >> duration >> dc;
+			getline(iss, enter, ',');
+			getline(iss, exit, ',');
+			getline(iss, obj);
+			if(!comma){
+				comma = true;
+			} else {
+				outFile << "," << endl;
+			}
+			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0
+			<< ",\"dur\":\"" << duration/1000.0  << "\", \"ph\":\"X\", \"name\":\""  << hex << obj << dec
+			<< "\", \"args\":{ \"type\":\"acquire\", \"enter\":\"" << enter << "\", \"exit\":\"" << exit << "\" } }";
+		} else if(action == " LOCK_INFLATE"){
+			getline(iss, type, ',');
+			getline(iss, obj, ',');
+			if(!comma){
+				comma = true;
+			} else {
+				outFile << "," << endl;
+			}
+			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0
+			<< ", \"ph\":\"i\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\" } }";
+		} else if(action == " LOCK_WAIT"){
+			iss >> duration >> dc;
+			getline(iss, obj);
+			if(!comma){
+				comma = true;
+			} else {
+				outFile << "," << endl;
+			}
+			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0
+			<< ",\"dur\":\"" << duration/1000.0  << "\", \"ph\":\"X\", \"name\":\""  << hex << obj << dec
+			<< "\", \"args\":{ \"type\":\"wait\"} }";
 		} else {
-			outFile << "," << endl;
+			assertf(false, "wrong action %s", action.c_str());
 		}
 
 		// cout << line << endl;
 
-		switch(s){
-			case IDLE:
-				if(action == "LOCK_ACQUIRE"){
-					string location;
-					iss >> dc;
-					getline(iss, location);
-					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"B\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\", \"location\":\"" << location << "\" } }";
-					if(type == "THIN")	s = WAIT_THIN;
-					else if (type == "FAT") s = WAIT_FAT;
-					else 	assertf(false, "wrong type");
-				} else if(action == "LOCK_INFLATE"){
-					assertf(type == "HASH" || type == "RECURSION" || type == "WAIT", "cannot inflate in IDLE, obj %s", obj.c_str());
-					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"i\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\" } }";
-				} else if(action == "LOCK_WAIT"){
-					assertf(type == "START", "can only start Wait() in IDLE, obj %s", obj.c_str());
-					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"B\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"WAIT\" } }";
-					s = WAIT;
-				} else {
-					assertf(false, "wrong ACTION %s obj %s", action.c_str(), obj.c_str());
-				}
-				break;
-			case WAIT_THIN:
-				if(action == "LOCK_ACQUIRE"){
-					if(type == "FAT"){
-						// someone else inflate the lock
-						s = WAIT_FAT;
-					} else if(type == "THIN"){
-						// someone else get the lock when we try to inflate
-						s = WAIT_THIN;
-					} else {
-						assertf(false, "wrong type %s", type.c_str());
-					}
-					string location;
-					iss >> dc;
-					getline(iss, location);
-					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"E\" }," << endl;
-					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"B\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\", \"location\":\"" << location << "\" } }";
-				} else if(action == "LOCK_GET"){
-					assertf(type == "THIN", "can only get THIN when wait for THIN");
-					s = IDLE;
-					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"E\" }";
-				} else if(action == "LOCK_INFLATE"){
-					assertf(type == "CONTENTION" || type == "WAIT" || type == "HASH", "inflate lock when WAIT_THIN must be CONTENTION, obj %s", obj.c_str());
-					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"i\", \"name\":\"" << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\" } }";
-				} else {
-					assertf(false, "wrong ACTION %s, obj %s", action.c_str(), obj.c_str());
-				}
-				break;
-			case WAIT_FAT:
-				if(action == "LOCK_GET"){
-					assertf(type == "FAT", "can only get fat in WAIT_FAT");
-					outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"E\" }";
-					s = IDLE;
-				} else {
-					assertf(false, "wrong ACTION %s, obj %s", action.c_str(), obj.c_str());
-				}
-				break;
-			case WAIT:
-				assertf(action == "LOCK_WAIT" && type == "END", "must first be waken up, obj %s", obj.c_str());
-				outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"E\" }";
-				s = IDLE;
-				break;
-			default:
-				assertf(false, "wrong state %d", s);
-		}
+		// switch(s){
+		// 	case IDLE:
+		// 		if(action == "LOCK_ACQUIRE"){
+		// 			string location;
+		// 			iss >> dc;
+		// 			getline(iss, location);
+		// 			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"B\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\", \"location\":\"" << location << "\" } }";
+		// 			if(type == "THIN")	s = WAIT_THIN;
+		// 			else if (type == "FAT") s = WAIT_FAT;
+		// 			else 	assertf(false, "wrong type");
+		// 		} else if(action == "LOCK_INFLATE"){
+		// 			assertf(type == "HASH" || type == "RECURSION" || type == "WAIT", "cannot inflate in IDLE, obj %s", obj.c_str());
+		// 			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"i\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\" } }";
+		// 		} else if(action == "LOCK_WAIT"){
+		// 			assertf(type == "START", "can only start Wait() in IDLE, obj %s", obj.c_str());
+		// 			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"B\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"WAIT\" } }";
+		// 			s = WAIT;
+		// 		} else {
+		// 			assertf(false, "wrong ACTION %s obj %s", action.c_str(), obj.c_str());
+		// 		}
+		// 		break;
+		// 	case WAIT_THIN:
+		// 		if(action == "LOCK_ACQUIRE"){
+		// 			if(type == "FAT"){
+		// 				// someone else inflate the lock
+		// 				s = WAIT_FAT;
+		// 			} else if(type == "THIN"){
+		// 				// someone else get the lock when we try to inflate
+		// 				s = WAIT_THIN;
+		// 			} else {
+		// 				assertf(false, "wrong type %s", type.c_str());
+		// 			}
+		// 			string location;
+		// 			iss >> dc;
+		// 			getline(iss, location);
+		// 			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"E\" }," << endl;
+		// 			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"B\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\", \"location\":\"" << location << "\" } }";
+		// 		} else if(action == "LOCK_GET"){
+		// 			assertf(type == "THIN", "can only get THIN when wait for THIN");
+		// 			s = IDLE;
+		// 			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"E\" }";
+		// 		} else if(action == "LOCK_INFLATE"){
+		// 			assertf(type == "CONTENTION" || type == "WAIT" || type == "HASH", "inflate lock when WAIT_THIN must be CONTENTION, obj %s", obj.c_str());
+		// 			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"i\", \"name\":\"" << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\" } }";
+		// 		} else {
+		// 			assertf(false, "wrong ACTION %s, obj %s", action.c_str(), obj.c_str());
+		// 		}
+		// 		break;
+		// 	case WAIT_FAT:
+		// 		if(action == "LOCK_GET"){
+		// 			assertf(type == "FAT", "can only get fat in WAIT_FAT");
+		// 			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"E\" }";
+		// 			s = IDLE;
+		// 		} else {
+		// 			assertf(false, "wrong ACTION %s, obj %s", action.c_str(), obj.c_str());
+		// 		}
+		// 		break;
+		// 	case WAIT:
+		// 		assertf(action == "LOCK_WAIT" && type == "END", "must first be waken up, obj %s", obj.c_str());
+		// 		outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0 << ", \"ph\":\"E\" }";
+		// 		s = IDLE;
+		// 		break;
+		// 	default:
+		// 		assertf(false, "wrong state %d", s);
+		// }
 	}
 	inFile.close();
 
