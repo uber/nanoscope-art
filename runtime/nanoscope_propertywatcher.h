@@ -110,6 +110,7 @@ class NanoscopePropertyWatcher {
   static Thread* traced;
   Thread* to_trace;
   bool use_perf = true;
+  bool log_lock = false;
   const std::string package_name;
   const std::string watched_properties[3] = {"dev.nanoscope", "dev.arttracing", "arttracing"};
   const std::string output_dir = "/data/data/" + package_name + "/files";
@@ -171,7 +172,13 @@ class NanoscopePropertyWatcher {
       }
 
       std::string timer_mode;
-      std::getline(ss, timer_mode);
+      std::string log = "";
+      if(std::getline(ss, timer_mode, ':')){
+        std::getline(ss, log);
+      } else {
+        std::getline(ss, timer_mode);
+      }
+
       if(timer_mode == "perf"){
         LOG(INFO) << "nanoscope: timer mode: " << timer_mode;
         use_perf = true;
@@ -181,6 +188,12 @@ class NanoscopePropertyWatcher {
       } else {
         LOG(ERROR) << "nanoscope: unsupported timer mode: " << timer_mode;
         return;
+      }
+
+      if(log == "lock"){
+        log_lock = true;
+      } else {
+        log_lock = false;
       }
 
       start_tracing(self, output_dir + "/" + output_filename);
@@ -225,8 +238,10 @@ class NanoscopePropertyWatcher {
     ioctl(sample_fd[0], PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
     ioctl(sample_fd[0], PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
 #endif
-    LOG(INFO) << "nanoscope: set log pid " << traced -> GetTid();
-    Runtime::Current()->SetLockLogPid(traced->GetTid());
+    if(log_lock){
+      LOG(INFO) << "nanoscope: set log pid " << traced -> GetTid();
+      Runtime::Current()->SetLockLogPid(traced->GetTid());
+    }
   }
 
   void stop_tracing(Thread* self) {
@@ -254,7 +269,9 @@ class NanoscopePropertyWatcher {
     traced->StopTracing(output_path);
     Locks::mutator_lock_->SharedUnlock(self);
     output_path = "";
-    Runtime::Current()->SetLockLogPid(-1);
+    if(log_lock){
+      Runtime::Current()->SetLockLogPid(-1);
+    }
   }
 };
 

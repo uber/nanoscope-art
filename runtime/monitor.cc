@@ -706,7 +706,17 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
   // }
   if(tracePid != -1 && getpid() == tracePid && sleep_ts != 0){
     uint64_t duration = generic_timer_ts() - sleep_ts;
-    LOG(INFO) << "LOCK_WAIT:" << tid << "," << sleep_ts << "," << duration << "," << obj;
+    if(duration / 1000000 > 100){
+      uint32_t pc;
+      ArtMethod* m = self->GetCurrentMethod(&pc);
+      const char* filename;
+      int32_t line_number;
+      TranslateLocation(m, pc, &filename, &line_number);
+      LOG(INFO) << "LOCK_WAIT:" << tid << "," << sleep_ts << "," << duration << "," << obj
+      << "," << (filename != nullptr ? filename : "null") << ":" << line_number;
+    } else {
+      LOG(INFO) << "LOCK_WAIT:" << tid << "," << sleep_ts << "," << duration << "," << obj << ",NA";
+    }
   }
   Lock(self);
   monitor_lock_.Lock(self);
@@ -932,7 +942,18 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
           // }
           if(log && tracePid != -1 && getpid() == tracePid) {
             uint64_t duration = generic_timer_ts() - start_ts;
-            LOG(INFO) << "LOCK_ACQUIRE:" << tid << "," << start_ts << "," << duration << "," << (enter_fat ? "FAT,":"THIN,") << (exit_fat ? "FAT,":"THIN,") << obj;
+            std::string location = "";
+            if(duration / 1000000 > 100){
+              uint32_t pc;
+              ArtMethod* m = self->GetCurrentMethod(&pc);
+              const char* filename;
+              int32_t line_number;
+              TranslateLocation(m, pc, &filename, &line_number);
+              LOG(INFO) << "LOCK_ACQUIRE:" << tid << "," << start_ts << "," << duration << "," << (enter_fat ? "FAT,":"THIN,") << (exit_fat ? "FAT,":"THIN,") << obj
+              << "," << (filename != nullptr ? filename : "null") << ":" << line_number;
+            } else {
+              LOG(INFO) << "LOCK_ACQUIRE:" << tid << "," << start_ts << "," << duration << "," << (enter_fat ? "FAT,":"THIN,") << (exit_fat ? "FAT,":"THIN,") << obj << ",NA";
+            }
           }
           return h_obj.Get();  // Success!
         }
@@ -1011,7 +1032,17 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
             mon->Lock(self);
             uint64_t duration = generic_timer_ts() - start_ts;
             exit_fat = true;
-            LOG(INFO) << "LOCK_ACQUIRE:" << tid << "," << start_ts << "," << duration << "," << (enter_fat ? "FAT,":"THIN,") << (exit_fat ? "FAT,":"THIN,") << obj;
+            if(duration / 1000000 > 100){
+              uint32_t pc;
+              ArtMethod* m = self->GetCurrentMethod(&pc);
+              const char* filename;
+              int32_t line_number;
+              TranslateLocation(m, pc, &filename, &line_number);
+              LOG(INFO) << "LOCK_ACQUIRE:" << tid << "," << start_ts << "," << duration << "," << (enter_fat ? "FAT,":"THIN,") << (exit_fat ? "FAT,":"THIN,") << obj
+              << "," << (filename != nullptr ? filename : "null") << ":" << line_number;
+            } else {
+              LOG(INFO) << "LOCK_ACQUIRE:" << tid << "," << start_ts << "," << duration << "," << (enter_fat ? "FAT,":"THIN,") << (exit_fat ? "FAT,":"THIN,") << obj << ",NA";
+            }
             return h_obj.Get();  // Success!
           } else {
             mon->Lock(self);

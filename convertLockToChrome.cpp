@@ -117,7 +117,7 @@ int main(int argc, char *argv[]){
 	int tid, owner_tid;
 	long ts, duration;
 	char dc;
-	string retType, name;
+	string retType, name, location;
 
 	ofstream outFile("lock.json");
 	outFile << "{" << endl << "\"traceEvents\": [" << endl;
@@ -132,15 +132,25 @@ int main(int argc, char *argv[]){
 			iss >> duration >> dc;
 			getline(iss, enter, ',');
 			getline(iss, exit, ',');
-			getline(iss, obj);
+			getline(iss, obj, ',');
+			getline(iss, location);
 			if(!comma){
 				comma = true;
 			} else {
 				outFile << "," << endl;
 			}
-			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0
-			<< ",\"dur\":\"" << duration/1000.0  << "\", \"ph\":\"X\", \"name\":\""  << hex << obj << dec
-			<< "\", \"args\":{ \"type\":\"acquire\", \"enter\":\"" << enter << "\", \"exit\":\"" << exit << "\" } }";
+			// outFile << fixed << "{ \"pid\":" << pid << ", \"tid\":" << tid << ", \"ts\":" << ts/1000.0
+			// << ",\"dur\":\"" << duration/1000.0  << "\", \"ph\":\"X\", \"name\":\""  << hex << obj << dec
+			// << "\", \"args\":{ \"type\":\"acquire\", \"enter\":\"" << enter << "\", \"exit\":\"" << exit << "\" } }";
+			outFile << fixed << "{ \"pid\":" << pid << ", \"tid\":" << tid << ", \"ts\":" << ts/1000.0
+			<< ",\"dur\":\"" << duration/1000.0  << "\", \"ph\":\"X\", \"name\":\"contention\","
+			<< " \"args\":{ \"obj\":\"" << hex << obj << dec << "\", \"enter\":\"" << enter << "\", \"exit\":\"" << exit
+			<< "\", \"location\":\"" << location << "\" } }";
+			// outFile << fixed << "{ \"pid\":" << pid << ", \"tid\":" << tid << ", \"ts\":" << ts/1000.0
+			// << ", \"ph\":\"B\", \"name\":\""  << hex << obj << dec
+			// << "\", \"args\":{ \"type\":\"acquire\", \"enter\":\"" << enter << "\", \"exit\":\"" << exit << "\" } }," << endl;
+			// outFile << fixed << "{ \"pid\":" << pid << ", \"tid\":" << tid << ", \"ts\":" << (ts + duration)/1000.0
+		 //  << ", \"ph\":\"E\", \"name\":\""  << hex << obj << dec << "\" }";
 		} else if(action == " LOCK_INFLATE"){
 			getline(iss, type, ',');
 			getline(iss, obj, ',');
@@ -149,19 +159,24 @@ int main(int argc, char *argv[]){
 			} else {
 				outFile << "," << endl;
 			}
-			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0
-			<< ", \"ph\":\"i\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\" } }";
+			outFile << fixed << "{ \"pid\":" << pid << ", \"tid\":" << tid << ", \"ts\":" << ts/1000.0
+			<< ", \"ph\":\"i\", \"s\":\"t\", \"name\":\""  << hex << obj << dec << "\", \"args\":{ \"type\":\"" << type << "\" } }";
 		} else if(action == " LOCK_WAIT"){
 			iss >> duration >> dc;
-			getline(iss, obj);
+			getline(iss, obj, ',');
+			getline(iss, location);
 			if(!comma){
 				comma = true;
 			} else {
 				outFile << "," << endl;
 			}
-			outFile << fixed << "{ \"pid\":" << pid << " , \"tid\":" << tid << " , \"ts\":" << ts/1000.0
-			<< ",\"dur\":\"" << duration/1000.0  << "\", \"ph\":\"X\", \"name\":\""  << hex << obj << dec
-			<< "\", \"args\":{ \"type\":\"wait\"} }";
+			// outFile << fixed << "{ \"pid\":" << pid << ", \"tid\":" << tid << ", \"ts\":" << ts/1000.0
+			// << ",\"dur\":\"" << duration/1000.0  << "\", \"ph\":\"X\", \"name\":\""  << hex << obj << dec
+			// << "\", \"args\":{ \"type\":\"wait\"} }";
+			outFile << fixed << "{ \"pid\":" << pid << ", \"tid\":" << tid << ", \"ts\":" << ts/1000.0
+			<< ",\"dur\":\"" << duration/1000.0  << "\", \"ph\":\"X\", \"name\":\"wait\","
+			<< " \"args\":{ \"obj\":\"" << hex << obj << dec
+			<< "\", \"location\":\"" << location << "\" } }";
 		} else {
 			assertf(false, "wrong action %s", action.c_str());
 		}
@@ -243,10 +258,10 @@ int main(int argc, char *argv[]){
 		string name;
 		getline(iss, name);
 		outFile << "," << endl;
-		outFile << "{ \"name\":\"thread_name\", \"pid\":" << pid << " , \"tid\":" << tid << ", \"ph\":\"M\", \"args\":{ \"name\":\"" << tid << "-" << name << "\" } }";
+		outFile << "{ \"name\":\"thread_name\", \"pid\":" << pid << ", \"tid\":" << tid << ", \"ph\":\"M\", \"args\":{ \"name\":\"" << tid << "-" << name << "\" } }";
 	}
 	outFile << "," << endl;
-	outFile << "{ \"name\":\"thread_name\", \"pid\":" << pid << " , \"tid\":" << pid << ", \"ph\":\"M\", \"args\":{ \"name\":\"" << pid << "-main\" } }";
+	outFile << "{ \"name\":\"thread_name\", \"pid\":" << pid << ", \"tid\":" << pid << ", \"ph\":\"M\", \"args\":{ \"name\":\"" << pid << "-main\" } }";
 
 
 	inFile2.close();
