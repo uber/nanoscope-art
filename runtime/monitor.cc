@@ -706,17 +706,17 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
   // }
   if(tracePid != -1 && getpid() == tracePid && sleep_ts != 0){
     uint64_t duration = generic_timer_ts() - sleep_ts;
-    if(duration / 1000000 > 100){
-      uint32_t pc;
-      ArtMethod* m = self->GetCurrentMethod(&pc);
-      const char* filename;
-      int32_t line_number;
-      TranslateLocation(m, pc, &filename, &line_number);
-      LOG(INFO) << "LOCK_WAIT:" << tid << "," << sleep_ts << "," << duration << "," << obj << ",NA";
+    // if(duration / 1000000 > 50){
+      // uint32_t pc;
+      // ArtMethod* m = self->GetCurrentMethod(&pc);
+      // const char* filename;
+      // int32_t line_number;
+      // TranslateLocation(m, pc, &filename, &line_number);
+      // LOG(INFO) << "LOCK_WAIT:" << tid << "," << sleep_ts << "," << duration << "," << obj << ",NA";
       // << "," << PrettyMethod(m) << "(" << (filename != nullptr ? filename : "null") << ":" << line_number << ")";
-    } else {
+    // } else {
       LOG(INFO) << "LOCK_WAIT:" << tid << "," << sleep_ts << "," << duration << "," << obj << ",NA";
-    }
+    // }
   }
   Lock(self);
   monitor_lock_.Lock(self);
@@ -943,7 +943,7 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
           if(log && tracePid != -1 && getpid() == tracePid) {
             uint64_t duration = generic_timer_ts() - start_ts;
             std::string location = "";
-            if(duration / 1000000 > 100){
+            if(duration / 1000000 > 50){
               uint32_t pc;
               ArtMethod* m = self->GetCurrentMethod(&pc);
               const char* filename;
@@ -1032,7 +1032,7 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
             mon->Lock(self);
             uint64_t duration = generic_timer_ts() - start_ts;
             exit_fat = true;
-            if(duration / 1000000 > 100){
+            if(duration / 1000000 > 50){
               uint32_t pc;
               ArtMethod* m = self->GetCurrentMethod(&pc);
               const char* filename;
