@@ -712,8 +712,8 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
       const char* filename;
       int32_t line_number;
       TranslateLocation(m, pc, &filename, &line_number);
-      LOG(INFO) << "LOCK_WAIT:" << tid << "," << sleep_ts << "," << duration << "," << obj
-      << "," << (filename != nullptr ? filename : "null") << ":" << line_number;
+      LOG(INFO) << "LOCK_WAIT:" << tid << "," << sleep_ts << "," << duration << "," << obj << ",NA";
+      // << "," << PrettyMethod(m) << "(" << (filename != nullptr ? filename : "null") << ":" << line_number << ")";
     } else {
       LOG(INFO) << "LOCK_WAIT:" << tid << "," << sleep_ts << "," << duration << "," << obj << ",NA";
     }
@@ -950,7 +950,7 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
               int32_t line_number;
               TranslateLocation(m, pc, &filename, &line_number);
               LOG(INFO) << "LOCK_ACQUIRE:" << tid << "," << start_ts << "," << duration << "," << (enter_fat ? "FAT,":"THIN,") << (exit_fat ? "FAT,":"THIN,") << obj
-              << "," << (filename != nullptr ? filename : "null") << ":" << line_number;
+              << "," << PrettyMethod(m) << "(" << (filename != nullptr ? filename : "null") << ":" << line_number << ")";
             } else {
               LOG(INFO) << "LOCK_ACQUIRE:" << tid << "," << start_ts << "," << duration << "," << (enter_fat ? "FAT,":"THIN,") << (exit_fat ? "FAT,":"THIN,") << obj << ",NA";
             }
@@ -1039,7 +1039,7 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
               int32_t line_number;
               TranslateLocation(m, pc, &filename, &line_number);
               LOG(INFO) << "LOCK_ACQUIRE:" << tid << "," << start_ts << "," << duration << "," << (enter_fat ? "FAT,":"THIN,") << (exit_fat ? "FAT,":"THIN,") << obj
-              << "," << (filename != nullptr ? filename : "null") << ":" << line_number;
+              << "," << PrettyMethod(m) << "(" << (filename != nullptr ? filename : "null") << ":" << line_number << ")";
             } else {
               LOG(INFO) << "LOCK_ACQUIRE:" << tid << "," << start_ts << "," << duration << "," << (enter_fat ? "FAT,":"THIN,") << (exit_fat ? "FAT,":"THIN,") << obj << ",NA";
             }
