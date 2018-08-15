@@ -105,19 +105,22 @@ constexpr size_t kStackOverflowProtectedSize = 4 * kMemoryToolStackGuardSizeScal
 
 static const char* kThreadNameDuringStartup = "<native thread without managed peer>";
 
-void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, uint64_t* timer_data, uint64_t* timer_end)
+void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, uint64_t* timer_data, uint64_t* timer_end, uint64_t* state_data, uint64_t* state_end)
   SHARED_REQUIRES(Locks::mutator_lock_) {
   std::map<ArtMethod*, std::string> pretty_method_cache;
   std::string out_path_tmp = out_path + ".tmp";
   std::string out_path_timer = out_path + ".timer";
+  std::string out_path_state = out_path + ".state";
   std::ofstream out(out_path_tmp, std::ofstream::trunc);
   std::ofstream out2(out_path_timer, std::ofstream::trunc);
+  std::ofstream out3(out_path_state, std::ofstream::trunc);
   int64_t* ptr = trace_data;
   uint64_t timer_ticks_per_second = ticks_per_second();
   uint64_t seconds_to_nanoseconds = 1000000000;
 
   uint64_t first_timestamp = 0;
   uint64_t* timer_ptr = timer_data;
+  uint64_t* state_ptr = state_data;
   // if(ptr < end && timer_ptr < timer_end){
   //   uint64_t first_timer_ts = reinterpret_cast<uint64_t>(*timer_ptr);
   //   first_timestamp = first_timer_ts;
@@ -158,11 +161,22 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
       uint64_t ctx_swtich = reinterpret_cast<uint64_t>(*timer_ptr++);
       out2 << timestamp << ", " << signal_time << ", " << maj_pf << ", " << min_pf << ", " << ctx_swtich << "\n";
     }
+
+    while (state_ptr < state_end) {
+      uint64_t timestamp = reinterpret_cast<uint64_t>(*state_ptr++);
+      timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
+      uint64_t old_state = reinterpret_cast<uint64_t>(*state_ptr++);
+      uint64_t new_state = reinterpret_cast<uint64_t>(*state_ptr++);
+      out3 << timestamp << ", "  << old_state << ", " << new_state << "\n";
+    }
+
     std::rename(out_path_tmp.c_str(), out_path.c_str());
   } else {
     LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
   }
   delete[] trace_data;
+  delete[] timer_data;
+  delete[] state_data;
 }
 
 void Thread::TraceStart(ArtMethod* method) {
@@ -220,6 +234,8 @@ void Thread::StartTracing() {
   tlsPtr_.trace_data_ptr = tlsPtr_.trace_data;
   tlsPtr_.timer_data = new uint64_t[40000000];
   tlsPtr_.timer_data_ptr = tlsPtr_.timer_data;
+  tlsPtr_.state_data = new uint64_t[40000000];
+  tlsPtr_.state_data_ptr = tlsPtr_.state_data;
 }
 
 void Thread::StopTracing(std::string out_path) {
@@ -233,14 +249,16 @@ void Thread::StopTracing(std::string out_path) {
 
   LOG(INFO) << "nanoscope: Flushing trace data to: " << out_path;
   if (kIsDebugBuild) {
-    flush_trace_data(out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tlsPtr_.timer_data,tlsPtr_.timer_data_ptr);
+    flush_trace_data(out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tlsPtr_.timer_data,tlsPtr_.timer_data_ptr, tlsPtr_.state_data, tlsPtr_.state_data_ptr);
   } else {
-    new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tlsPtr_.timer_data, tlsPtr_.timer_data_ptr);
+    new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tlsPtr_.timer_data, tlsPtr_.timer_data_ptr, tlsPtr_.state_data, tlsPtr_.state_data_ptr);
   }
   tlsPtr_.trace_data = nullptr;
   tlsPtr_.trace_data_ptr = nullptr;
   tlsPtr_.timer_data = nullptr;
   tlsPtr_.timer_data_ptr = nullptr;
+  tlsPtr_.state_data = nullptr;
+  tlsPtr_.state_data_ptr = nullptr;
 
   // A race condition exists if we stop tracing from a different Thread. In Thread::TraceStart and Thread::TraceEnd
   // we may end up incrementing and dereferencing trace_data_ptr after we've nulled it out above. If we hit this race
@@ -255,6 +273,8 @@ void Thread::StopTracing(std::string out_path) {
     tlsPtr_.trace_data_ptr = nullptr;
     tlsPtr_.timer_data = nullptr;
     tlsPtr_.timer_data_ptr = nullptr;
+    tlsPtr_.state_data = nullptr;
+    tlsPtr_.state_data_ptr = nullptr;
   }
 }
 
@@ -269,6 +289,15 @@ void Thread::TimerHandler(uint64_t time, uint64_t maj_pf, uint64_t min_pf, uint6
     LOG(INFO) << "nanoscope: wrong thread" << "\n";
   }
 }
+
+void Thread::LogStateTransition(ThreadState old_state, ThreadState new_state){
+  if(tlsPtr_.state_data_ptr != nullptr){
+    *tlsPtr_.state_data_ptr ++ = generic_timer_count();
+    *tlsPtr_.state_data_ptr ++ = old_state;
+    *tlsPtr_.state_data_ptr ++ = new_state;
+  }
+}
+
 
 void Thread::InitCardTable() {
   tlsPtr_.card_table = Runtime::Current()->GetHeap()->GetCardTable()->GetBiasedBegin();

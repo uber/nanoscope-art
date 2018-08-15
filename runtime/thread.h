@@ -178,8 +178,9 @@ class Thread {
   // Disables tracing on this Thread and flushes logs to the file at out_path.
   void StopTracing(std::string out_path) SHARED_REQUIRES(Locks::mutator_lock_);
 
-  // Disables tracing on this Thread and flushes logs to the file at out_path.
   void TimerHandler(uint64_t time, uint64_t maj_pf = 0, uint64_t min_pf = 0, uint64_t ctx_switch = 0);
+
+  void LogStateTransition(ThreadState old_state, ThreadState new_state);
 
   // Creates a new native thread corresponding to the given managed peer.
   // Used to implement Thread.start.
@@ -1392,7 +1393,9 @@ class Thread {
   } tls64_;
 
   struct PACKED(sizeof(void*)) tls_ptr_sized_values {
-      tls_ptr_sized_values() : trace_data_ptr(nullptr), trace_data(nullptr), card_table(nullptr), exception(nullptr), stack_end(nullptr),
+      tls_ptr_sized_values() : trace_data_ptr(nullptr), trace_data(nullptr), timer_data_ptr(nullptr),
+      timer_data(nullptr), state_data_ptr(nullptr), state_data(nullptr),
+      card_table(nullptr), exception(nullptr), stack_end(nullptr),
       managed_stack(), suspend_trigger(nullptr), jni_env(nullptr), tmp_jni_env(nullptr),
       self(nullptr), opeer(nullptr), jpeer(nullptr), stack_begin(nullptr), stack_size(0),
       stack_trace_sample(nullptr), wait_next(nullptr), monitor_enter_object(nullptr),
@@ -1418,8 +1421,14 @@ class Thread {
     // Marks our current position in trace_data.
     uint64_t* timer_data_ptr;
 
-    // Holds our tracing log data.
+    // Holds our timer log data.
     uint64_t* timer_data;
+
+    // Marks our current position in state_data.
+    uint64_t* state_data_ptr;
+
+    // Holds our state transition log data.
+    uint64_t* state_data;
 
     // The biased card table, see CardTable for details.
     uint8_t* card_table;
