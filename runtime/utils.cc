@@ -1923,7 +1923,7 @@ uint64_t ALWAYS_INLINE generic_timer_ts() {
   uint64_t ts = generic_timer_count();
   uint64_t timer_ticks_per_second = ticks_per_second();
   uint64_t seconds_to_nanoseconds = 1000000000;
-  return ts * seconds_to_nanoseconds / timer_ticks_per_second;
+  return static_cast<uint64_t>(ts * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
 }
 
 #if defined(__i386)

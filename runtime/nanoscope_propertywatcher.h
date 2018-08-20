@@ -128,7 +128,7 @@ class NanoscopePropertyWatcher {
   explicit NanoscopePropertyWatcher(Thread* t, std::string _package_name) : to_trace(t), package_name(_package_name) {}
 
   void watch() {
-    // refresh_state(Thread::Current());
+    refresh_state(Thread::Current());
     std::string thread_name = "nanoscope-propertywatcher:" + package_name;
 
     NanoscopePropertyWatcher* watcher = this;
