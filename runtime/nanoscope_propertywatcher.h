@@ -225,6 +225,7 @@ class NanoscopePropertyWatcher {
     traced = to_trace;
     output_path = _output_path;
     remove(output_path.c_str());
+    Runtime::Current()->SetStatsEnabled(true);
     Locks::mutator_lock_->SharedLock(self);
     traced->StartTracing();
     Locks::mutator_lock_->SharedUnlock(self);
@@ -249,6 +250,7 @@ class NanoscopePropertyWatcher {
       LOG(ERROR) << "nanoscope: No output path found.";
       return;
     }
+    Runtime::Current()->SetStatsEnabled(false);
 #if defined(__ANDROID__)
     if(use_perf){
       ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);

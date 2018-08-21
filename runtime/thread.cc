@@ -159,7 +159,9 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
       uint64_t maj_pf = reinterpret_cast<uint64_t>(*timer_ptr++);
       uint64_t min_pf = reinterpret_cast<uint64_t>(*timer_ptr++);
       uint64_t ctx_swtich = reinterpret_cast<uint64_t>(*timer_ptr++);
-      out2 << timestamp << ", " << signal_time << ", " << maj_pf << ", " << min_pf << ", " << ctx_swtich << "\n";
+      uint64_t bytes = reinterpret_cast<uint64_t>(*timer_ptr++);
+      uint64_t objects = reinterpret_cast<uint64_t>(*timer_ptr++);
+      out2 << timestamp << ", " << signal_time << ", " << maj_pf << ", " << min_pf << ", " << ctx_swtich << ", "<< bytes << ", " << objects << "\n";
     }
 
     while (state_ptr < state_end) {
@@ -285,6 +287,17 @@ void Thread::TimerHandler(uint64_t time, uint64_t maj_pf, uint64_t min_pf, uint6
     *tlsPtr_.timer_data_ptr ++ = maj_pf;
     *tlsPtr_.timer_data_ptr ++ = min_pf;
     *tlsPtr_.timer_data_ptr ++ = ctx_swtich;
+
+    // gc::Heap* heap = Runtime::Current()->GetHeap();
+    // *tlsPtr_.timer_data_ptr ++ = heap->GetBytesAllocated();
+    // *tlsPtr_.timer_data_ptr ++ = heap->GetObjectsAllocated();
+    // *tlsPtr_.timer_data_ptr ++ = 0;
+    // *tlsPtr_.timer_data_ptr ++ = 0;
+    // RuntimeStats* thread_stats = GetStats();
+    // *tlsPtr_.timer_data_ptr ++ = thread_stats->allocated_bytes;
+    RuntimeStats* global_stats = Runtime::Current()->GetStats();
+    *tlsPtr_.timer_data_ptr ++ = global_stats->allocated_bytes - global_stats->freed_bytes;
+    *tlsPtr_.timer_data_ptr ++ = global_stats->allocated_objects - global_stats->freed_objects;
   } else {
     LOG(INFO) << "nanoscope: wrong thread" << "\n";
   }
