@@ -161,7 +161,10 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
       uint64_t ctx_swtich = reinterpret_cast<uint64_t>(*timer_ptr++);
       uint64_t bytes = reinterpret_cast<uint64_t>(*timer_ptr++);
       uint64_t objects = reinterpret_cast<uint64_t>(*timer_ptr++);
-      out2 << timestamp << ", " << signal_time << ", " << maj_pf << ", " << min_pf << ", " << ctx_swtich << ", "<< bytes << ", " << objects << "\n";
+      uint64_t thread_alloc = reinterpret_cast<uint64_t>(*timer_ptr++);
+      uint64_t thread_free = reinterpret_cast<uint64_t>(*timer_ptr++);
+      out2 << timestamp << ", " << signal_time << ", " << maj_pf << ", " << min_pf << ", " << ctx_swtich
+      << ", "<< bytes << ", " << objects << ", "<< thread_alloc << ", " << thread_free << "\n";
     }
 
     while (state_ptr < state_end) {
@@ -196,6 +199,20 @@ void Thread::TraceEnd(ArtMethod* method) {
       *tlsPtr_.trace_data_ptr++ = 0;
       *tlsPtr_.trace_data_ptr++ = generic_timer_count();
     }
+  }
+}
+
+void Thread::TraceStartNative(ArtMethod* method){
+  if(LIKELY(tlsPtr_.trace_data_ptr != nullptr)){
+    *tlsPtr_.trace_data_ptr++ = reinterpret_cast<int64_t>(method);
+    *tlsPtr_.trace_data_ptr++ = generic_timer_count();
+  }
+}
+
+void Thread::TraceEndNative(){
+  if(LIKELY(tlsPtr_.trace_data_ptr != nullptr)){
+    *tlsPtr_.trace_data_ptr++ = 0;
+    *tlsPtr_.trace_data_ptr++ = generic_timer_count();
   }
 }
 
@@ -293,11 +310,20 @@ void Thread::TimerHandler(uint64_t time, uint64_t maj_pf, uint64_t min_pf, uint6
     // *tlsPtr_.timer_data_ptr ++ = heap->GetObjectsAllocated();
     // *tlsPtr_.timer_data_ptr ++ = 0;
     // *tlsPtr_.timer_data_ptr ++ = 0;
-    // RuntimeStats* thread_stats = GetStats();
-    // *tlsPtr_.timer_data_ptr ++ = thread_stats->allocated_bytes;
     RuntimeStats* global_stats = Runtime::Current()->GetStats();
-    *tlsPtr_.timer_data_ptr ++ = global_stats->allocated_bytes - global_stats->freed_bytes;
-    *tlsPtr_.timer_data_ptr ++ = global_stats->allocated_objects - global_stats->freed_objects;
+    if(global_stats -> allocated_bytes > global_stats->freed_bytes){
+      *tlsPtr_.timer_data_ptr ++ = global_stats->allocated_bytes - global_stats->freed_bytes;
+    } else {
+      *tlsPtr_.timer_data_ptr ++ = 0;
+    }
+    if(global_stats->allocated_objects > global_stats->freed_objects){
+      *tlsPtr_.timer_data_ptr ++ = global_stats->allocated_objects - global_stats->freed_objects;
+    } else {
+      *tlsPtr_.timer_data_ptr ++ = 0;
+    }
+    RuntimeStats* thread_stats = GetStats();
+    *tlsPtr_.timer_data_ptr ++ = thread_stats->allocated_bytes;
+    *tlsPtr_.timer_data_ptr ++ = thread_stats->freed_bytes;
   } else {
     LOG(INFO) << "nanoscope: wrong thread" << "\n";
   }

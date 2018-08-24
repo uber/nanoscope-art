@@ -36,6 +36,7 @@ extern uint32_t JniMethodStart(Thread* self) {
   uint32_t saved_local_ref_cookie = env->local_ref_cookie;
   env->local_ref_cookie = env->locals.GetSegmentState();
   ArtMethod* native_method = *self->GetManagedStack()->GetTopQuickFrame();
+  self->TraceStartNative(native_method);
   if (!native_method->IsFastNative()) {
     // When not fast JNI we transition out of runnable.
     self->TransitionFromRunnableToSuspended(kNative);
@@ -76,6 +77,7 @@ static void PopLocalReferences(uint32_t saved_local_ref_cookie, Thread* self)
 extern void JniMethodEnd(uint32_t saved_local_ref_cookie, Thread* self) {
   GoToRunnable(self);
   PopLocalReferences(saved_local_ref_cookie, self);
+  self->TraceEndNative();
 }
 
 extern void JniMethodEndSynchronized(uint32_t saved_local_ref_cookie, jobject locked,
@@ -83,6 +85,7 @@ extern void JniMethodEndSynchronized(uint32_t saved_local_ref_cookie, jobject lo
   GoToRunnable(self);
   UnlockJniSynchronizedMethod(locked, self);  // Must decode before pop.
   PopLocalReferences(saved_local_ref_cookie, self);
+  self->TraceEndNative();
 }
 
 // Common result handling for EndWithReference.
@@ -98,6 +101,7 @@ static mirror::Object* JniMethodEndWithReferenceHandleResult(jobject result,
     CheckReferenceResult(o, self);
   }
   VerifyObject(o);
+  self->TraceEndNative();
   return o;
 }
 
@@ -139,6 +143,7 @@ extern uint64_t GenericJniMethodEnd(Thread* self,
       UnlockJniSynchronizedMethod(locked, self);  // Must decode before pop.
     }
     PopLocalReferences(saved_local_ref_cookie, self);
+    self->TraceEndNative();
     switch (return_shorty_char) {
       case 'F': {
         if (kRuntimeISA == kX86) {

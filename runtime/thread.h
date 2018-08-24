@@ -157,6 +157,10 @@ class Thread {
   // Called from the interpreter to log the end of a method.
   ALWAYS_INLINE void TraceEnd(ArtMethod* method);
 
+  ALWAYS_INLINE void TraceStartNative(ArtMethod* method);
+
+  ALWAYS_INLINE void TraceEndNative();
+
   // Start a trace by copying string ptr into buffer. Using this method requires
   // an extra bit to be written into the buffer as a delimiter. However, it is still
   // significantly faster than atrace since it doesn't copy the entire function name
