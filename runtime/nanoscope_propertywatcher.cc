@@ -18,8 +18,6 @@ art::Thread* art::NanoscopePropertyWatcher::traced = NULL;
 #if defined(__ANDROID__)
 int art::NanoscopePropertyWatcher::fd = -1;
 int art::NanoscopePropertyWatcher::sample_fd [] = { [0 ... (NUM_COUNTER - 1)] = -1 };
-// uint64_t art::NanoscopePropertyWatcher::id = -1;
-// uint64_t art::NanoscopePropertyWatcher::id2 = -1;
 struct perf_event_mmap_page* art::NanoscopePropertyWatcher::page = NULL;
 #endif
 
@@ -41,14 +39,12 @@ namespace art{
       pe.disabled = 1;
       pe.pinned = 1;
       pe.wakeup_events = 1;
-      // fd = perf_event_open(pe, traced->GetTid(), -1, -1, 0);
       fd = perf_event_open(pe, -1, 0, -1, 0);
       if (fd < 0) {
         LOG(ERROR) << "nanoscope: Fail to open perf event file: master ";
         LOG(ERROR) << "nanoscope: " << strerror(errno);
         return;
       }
-      // ioctl(fd, PERF_EVENT_IOC_ID, &id);
 
       void* p = mmap(NULL, (1+1)*PERF_PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
       page = (struct perf_event_mmap_page*)p;
