@@ -44,43 +44,21 @@
 #include <sys/ioctl.h>
 #endif
 
-// #define SIGTIMER (SIGRTMIN + 3)
 #define SIGTIMER (SIGPROF)
-// #define SIGTIMER (SIGIO)
-
+// Total number of perf_event_counter to gather sampling data, change this when
+// add more counters. Right now we have 3: # of major page faults, # of minor page
+// faults, # of context switches.
 #define NUM_COUNTER 3
 
 namespace art {
-
 static const unsigned long PERF_PAGE_SIZE = sysconf(_SC_PAGESIZE);
-
+// Data structures defined to read perf_event counters in sighandler
 struct read_format {
   uint64_t nr;
   struct {
     uint64_t value;
     uint64_t id;
   } values[];
-};
-
-class RingBuffer {
-  private:
-    const char* _start;
-    unsigned long _offset;
-
-  public:
-    RingBuffer(struct perf_event_mmap_page* page) {
-        _start = (const char*)page + PERF_PAGE_SIZE;
-    }
-
-    struct perf_event_header* seek(uint64_t offset) {
-        _offset = (unsigned long)offset & (PERF_PAGE_SIZE - 1);
-        return (struct perf_event_header*)(_start + _offset);
-    }
-
-    uint64_t next() {
-        _offset = (_offset + sizeof(uint64_t)) & (PERF_PAGE_SIZE - 1);
-        return *(uint64_t*)(_start + _offset);
-    }
 };
 
 // This class enables starting and stopping tracing by setting the "dev.nanoscope" system property. For example, the
@@ -93,43 +71,75 @@ class RingBuffer {
 //     $ adb shell setprop dev.nanoscope \'\'
 //
 // It's valid to set this property before the process is started. In this case, the tracing will be triggered on app start.
+
+// Currently provides two ways of generating sampling signals:
+// perf_timer mode: uses perf_event_open to set up counter that sends overflow signals, sampling interval is based on wall clock time
+// cpu_timer mode: uses timer_settime to wake up and send signals periodically, samping interval is based on cpu time
+// Enabling sampling by selecting one of the sampling mode, for example, the commands below enables sampling in perf_timer mode
+//
+//     $ adb shell setprop dev.nanoscope com.example:data.txt:perf_timer
+//
+// The commands below enables sampling in cpu_timer mode:
+//
+//     $ adb shell setprop dev.nanoscope com.example:data.txt:cpu_timer
+//
 class NanoscopePropertyWatcher {
  public:
   static void attach(std::string package_name) {
-    Thread* to_trace = Thread::Current();
-#if defined(__ANDROID__)
-    LOG(INFO) << "nanoscope: attach to thread " << Thread::Current() -> GetTid() <<  ", " << gettid() << ": " << package_name << "\n";
-#endif
-    NanoscopePropertyWatcher* watcher = new NanoscopePropertyWatcher(to_trace, package_name);
-    // traced = to_trace;
+    Thread* watching_thread_ = Thread::Current();
+    NanoscopePropertyWatcher* watcher = new NanoscopePropertyWatcher(watching_thread_, package_name);
     watcher->watch();
   }
 
+  enum SampleMode {
+    kSampleDisabled,              // Sampling disabled
+    kSamplePerf,                  // perf_timer mode, use perf_event as sampling timer
+    kSampleCpu                   // cpu_timer mpde, use timer_settime as sampling timer
+  };
+
  private:
-  // Thread* this_traced;
-  static Thread* traced;
-  Thread* to_trace;
-  bool use_perf = true;
-  bool log_lock = false;
-  const std::string package_name;
-  const std::string watched_properties[3] = {"dev.nanoscope", "dev.arttracing", "arttracing"};
-  const std::string output_dir = "/data/data/" + package_name + "/files";
+  const std::string package_name_;
+  const std::string watched_properties_[3] = {"dev.nanoscope", "dev.arttracing", "arttracing"};
+  const std::string output_dir_ = "/data/data/" + package_name_ + "/files";
+  std::string output_path_;
 
-  std::string output_path;
+  // Thread with tracing enabled. Use static field so we can access it in signal handler
+  static Thread* tracing_thread_;
+  // Use perf_event to generate sampling signal (perf_timer mode) or use timer_settime (cpu_timer mode) or sampling disabled
+  static SampleMode sample_mode_;
+  // Thread current nanoscope watcher thread is monitoring
+  Thread* watching_thread_;
+
 #if defined(__ANDROID__)
-  int64_t interval = 1000000;  // 1 ms
-  static int fd;                       // fd for timer
-  // static uint64_t id;                  // event id for timer
-  static struct perf_event_mmap_page* page;
-  timer_t timerid;
-  static int sample_fd[NUM_COUNTER];             // fd for samples
-#endif
+  // Sampling interval in ns
+  int64_t sample_interval_ = 1000000;
+  // fd of perf_event counter that acts as a timer. Only in perf_timer mode
+  static int perf_timer_fd_;
+  // mmap-ed page used by perf_event counter that acts as a timer. Only in perf_timer mode
+  static struct perf_event_mmap_page* perf_timer_page_;
 
-  explicit NanoscopePropertyWatcher(Thread* t, std::string _package_name) : to_trace(t), package_name(_package_name) {}
+  // id of timer_settime. Only in cpu_timer mode
+  timer_t timer_id_;
+
+  // fds of perf_event counters used to gather sampling data.
+  static int sample_fd_[NUM_COUNTER];
+
+  // Set up signal handler for SIGPROF
+  static void signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo ATTRIBUTE_UNUSED, void *ucontext ATTRIBUTE_UNUSED);
+  // Install the correct sighandler
+  void install_sig_handler();
+
+  // Set up perf_event counters used to gather sampling data
+  void set_up_sample_counter(int counter_index, int groupfd, uint32_t type, uint64_t config);
+#endif
+  // Set up the sampling signal timer based on the timer mode
+  void set_up_timer();
+
+  explicit NanoscopePropertyWatcher(Thread* t, std::string _package_name) : package_name_(_package_name), watching_thread_(t) {}
 
   void watch() {
     refresh_state(Thread::Current());
-    std::string thread_name = "nanoscope-propertywatcher:" + package_name;
+    std::string thread_name = "nanoscope-propertywatcher:" + package_name_;
 
     NanoscopePropertyWatcher* watcher = this;
     new std::thread([watcher, thread_name]() {
@@ -150,17 +160,17 @@ class NanoscopePropertyWatcher {
     std::string value = get_system_property_value();
 
     if (value.empty()) {
-      if (output_path.empty()) return;
+      if (output_path_.empty()) return;
 
       stop_tracing(self);
     } else {
-      if (!output_path.empty()) return;
+      if (!output_path_.empty()) return;
 
       std::stringstream ss(value);
 
       std::string _package_name;
       std::getline(ss, _package_name, ':');
-      if (_package_name.compare(package_name) != 0) {
+      if (_package_name.compare(package_name_) != 0) {
         return;
       }
 
@@ -172,38 +182,27 @@ class NanoscopePropertyWatcher {
       }
 
       std::string timer_mode;
-      std::string log = "";
-      if(std::getline(ss, timer_mode, ':')){
-        std::getline(ss, log);
+      std::getline(ss, timer_mode);
+
+      if(timer_mode == "perf_timer"){
+        LOG(INFO) << "nanoscope: sampling enabled, timer mode: " << timer_mode;
+        sample_mode_ = kSamplePerf;
+      } else if (timer_mode == "cpu_timer"){
+        LOG(INFO) << "nanoscope: sampling enabled, timer mode: " << timer_mode;
+        sample_mode_ = kSampleCpu;
       } else {
-        std::getline(ss, timer_mode);
+        LOG(INFO) << "nanoscope: sampling disabled";
+        sample_mode_ = kSampleDisabled;
       }
 
-      if(timer_mode == "perf"){
-        LOG(INFO) << "nanoscope: timer mode: " << timer_mode;
-        use_perf = true;
-      } else if (timer_mode == "cpu"){
-        LOG(INFO) << "nanoscope: timer mode: " << timer_mode;
-        use_perf = false;
-      } else {
-        LOG(ERROR) << "nanoscope: unsupported timer mode: " << timer_mode;
-        return;
-      }
-
-      if(log == "lock"){
-        log_lock = true;
-      } else {
-        log_lock = false;
-      }
-
-      start_tracing(self, output_dir + "/" + output_filename);
+      start_tracing(self, output_dir_ + "/" + output_filename);
     }
   }
 
   std::string get_system_property_value() {
     char* buffer = new char[1028];
 #if defined(__ANDROID__)
-    for (std::string watched_property : watched_properties) {
+    for (std::string watched_property : watched_properties_) {
       int length = __system_property_get(watched_property.c_str(), buffer);
       if (length > 0) break;
     }
@@ -211,69 +210,81 @@ class NanoscopePropertyWatcher {
     return std::string(buffer);
   }
 
+  void start_tracing(Thread* self, std::string output_path) {
+    tracing_thread_ = watching_thread_;
+    output_path_ = output_path;
+    remove(output_path_.c_str());
 
-#if defined(__ANDROID__)
-  static void signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo ATTRIBUTE_UNUSED, void *ucontext ATTRIBUTE_UNUSED);
-  static void signal_handler_timer(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo ATTRIBUTE_UNUSED, void *ucontext ATTRIBUTE_UNUSED);
-  void install_sig_handler();
-  void set_up_counter(int sample_index, int groupfd, uint32_t type, uint64_t config);
-#endif
-  void setup_timer();
-
-  void start_tracing(Thread* self, std::string _output_path) {
-    // nanoscope tracing
-    traced = to_trace;
-    output_path = _output_path;
-    remove(output_path.c_str());
+    // Enable allocation stats counter
     Runtime::Current()->SetStatsEnabled(true);
+
+    // Start Nanoscope tracing
     Locks::mutator_lock_->SharedLock(self);
-    traced->StartTracing();
+    tracing_thread_->StartTracing();
     Locks::mutator_lock_->SharedUnlock(self);
+
 #if defined(__ANDROID__)
-    setup_timer();
-    set_up_counter(0, -1, PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MAJ);
-    set_up_counter(1, sample_fd[0], PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MIN);
-    set_up_counter(2, sample_fd[0], PERF_TYPE_SOFTWARE, PERF_COUNT_SW_CONTEXT_SWITCHES);
-    ioctl(fd, PERF_EVENT_IOC_RESET, 0);
-    ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
-    ioctl(sample_fd[0], PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
-    ioctl(sample_fd[0], PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
-#endif
-    if(log_lock){
-      LOG(INFO) << "nanoscope: set log pid " << traced -> GetTid();
-      Runtime::Current()->SetLockLogPid(traced->GetTid());
+    // Set up sampling
+    if(sample_mode_ != kSampleDisabled){
+      install_sig_handler();
+      set_up_timer();
+
+      // Set up perf_event counters used to gather sampling data
+      // All counters are in the same perf_event graoup, with the leader being the first counter
+      // so that we can read all of them at the same time
+      set_up_sample_counter(0, -1, PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MAJ);
+      set_up_sample_counter(1, sample_fd_[0], PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MIN);
+      set_up_sample_counter(2, sample_fd_[0], PERF_TYPE_SOFTWARE, PERF_COUNT_SW_CONTEXT_SWITCHES);
+      ioctl(perf_timer_fd_, PERF_EVENT_IOC_RESET, 0);
+      ioctl(perf_timer_fd_, PERF_EVENT_IOC_REFRESH, 1);
+      ioctl(sample_fd_[0], PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
+      ioctl(sample_fd_[0], PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
     }
+#endif
   }
 
   void stop_tracing(Thread* self) {
-    if (output_path.empty()) {
+    if (output_path_.empty()) {
       LOG(ERROR) << "nanoscope: No output path found.";
       return;
     }
+    // Disable allocation stats counter
     Runtime::Current()->SetStatsEnabled(false);
+
+    // Stop sampling
 #if defined(__ANDROID__)
-    if(use_perf){
-      ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
-      close(fd);
-      fd = 0;
-      munmap(page, 2 * PERF_PAGE_SIZE);
-      page = NULL;
-      ioctl(sample_fd[0], PERF_EVENT_IOC_DISABLE, 0);
+    if(sample_mode_ == kSamplePerf){
+      // Delete perf_event counter that acts as a timer
+      ioctl(perf_timer_fd_, PERF_EVENT_IOC_DISABLE, 0);
+      close(perf_timer_fd_);
+      perf_timer_fd_ = 0;
+      munmap(perf_timer_page_, 2 * PERF_PAGE_SIZE);
+      perf_timer_page_ = NULL;
+
+      // Delete perf_event counters used to gather sampling data
+      ioctl(sample_fd_[0], PERF_EVENT_IOC_DISABLE, 0);
       for(int i = 0; i < NUM_COUNTER; i++){
-        close(sample_fd[i]);
-        sample_fd[i] = 0;
+        close(sample_fd_[i]);
+        sample_fd_[i] = 0;
       }
-    } else {
-      timer_delete(timerid);
+    } else if(sample_mode_ == kSampleCpu) {
+      // Delete timer_settime timer
+      timer_delete(timer_id_);
+
+      // Delete perf_event counters used to gather sampling data
+      ioctl(sample_fd_[0], PERF_EVENT_IOC_DISABLE, 0);
+      for(int i = 0; i < NUM_COUNTER; i++){
+        close(sample_fd_[i]);
+        sample_fd_[i] = 0;
+      }
     }
 #endif
+
+    // Stop tracing
     Locks::mutator_lock_->SharedLock(self);
-    traced->StopTracing(output_path);
+    tracing_thread_->StopTracing(output_path_);
     Locks::mutator_lock_->SharedUnlock(self);
-    output_path = "";
-    if(log_lock){
-      Runtime::Current()->SetLockLogPid(-1);
-    }
+    output_path_ = "";
   }
 };
 

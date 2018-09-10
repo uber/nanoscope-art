@@ -121,11 +121,6 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
   uint64_t first_timestamp = 0;
   uint64_t* timer_ptr = timer_data;
   uint64_t* state_ptr = state_data;
-  // if(ptr < end && timer_ptr < timer_end){
-  //   uint64_t first_timer_ts = reinterpret_cast<uint64_t>(*timer_ptr);
-  //   first_timestamp = first_timer_ts;
-  // }
-  // LOG(INFO) << "nanoscope: first ts:" << first_timestamp;
   if (out.is_open()) {
     while (ptr < end) {
       ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
@@ -148,7 +143,6 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
         }
       }
       int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
-      // if((uint64_t) timestamp< first_timestamp)  first_timestamp = timestamp;
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
       out << timestamp << ":" << pretty_method << "\n";
     }
@@ -264,7 +258,8 @@ void Thread::StopTracing(std::string out_path) {
 
   char* dir = dirname(strdup(out_path.c_str()));
   std::string mkdirs = "mkdir -p " + std::string(dir);
-  system(mkdirs.c_str());
+  int ret = system(mkdirs.c_str());
+  CHECK(ret != -1);
 
   LOG(INFO) << "nanoscope: Flushing trace data to: " << out_path;
   if (kIsDebugBuild) {
@@ -305,11 +300,7 @@ void Thread::TimerHandler(uint64_t time, uint64_t maj_pf, uint64_t min_pf, uint6
     *tlsPtr_.timer_data_ptr ++ = min_pf;
     *tlsPtr_.timer_data_ptr ++ = ctx_swtich;
 
-    // gc::Heap* heap = Runtime::Current()->GetHeap();
-    // *tlsPtr_.timer_data_ptr ++ = heap->GetBytesAllocated();
-    // *tlsPtr_.timer_data_ptr ++ = heap->GetObjectsAllocated();
-    // *tlsPtr_.timer_data_ptr ++ = 0;
-    // *tlsPtr_.timer_data_ptr ++ = 0;
+    // Get allocation info
     RuntimeStats* global_stats = Runtime::Current()->GetStats();
     if(global_stats -> allocated_bytes > global_stats->freed_bytes){
       *tlsPtr_.timer_data_ptr ++ = global_stats->allocated_bytes - global_stats->freed_bytes;
@@ -1129,7 +1120,6 @@ void Thread::SetThreadName(const char* name) {
     return;
   }
   tlsPtr_.name->assign(name);
-  LOG(INFO) << "NAME: " << GetTid() << "," << name << std::endl;
   ::art::SetThreadName(name);
   Dbg::DdmSendThreadNotification(this, CHUNK_TYPE("THNM"));
 }

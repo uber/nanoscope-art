@@ -55,8 +55,6 @@ class ScopedThreadStateChange : public ValueObject {
           // A suspended transition to another effectively suspended transition, ok to use Unsafe.
           self_->SetState(new_thread_state);
         }
-        // self->LogStateTransition(old_thread_state_, new_thread_state);
-        // LOG(INFO) << "STATE_TRANSIT: " << self-> GetTid() << "," << old_thread_state_ << "," << new_thread_state;
       }
     }
   }

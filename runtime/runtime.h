@@ -654,16 +654,6 @@ class Runtime {
     return env_snapshot_.GetSnapshot();
   }
 
-  pid_t LockLogPid() const{
-    // LOG(INFO) << "curr log pid " << lock_log_pid_;
-    return lock_log_pid_;
-  }
-
-  void SetLockLogPid(pid_t pid) {
-    lock_log_pid_ = pid;
-    LOG(INFO) << "set log pid " << lock_log_pid_;
-  }
-
  private:
   static void InitPlatformSignalHandlers();
 
@@ -887,9 +877,6 @@ class Runtime {
 
   // Whether zygote code is in a section that should not start threads.
   bool zygote_no_threads_;
-
-  // process id of lock tracking
-  pid_t lock_log_pid_;
 
   // Saved environment.
   class EnvSnapshot {
