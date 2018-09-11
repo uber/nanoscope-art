@@ -108,10 +108,10 @@ static const char* kThreadNameDuringStartup = "<native thread without managed pe
 void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, uint64_t* timer_data, uint64_t* timer_end, uint64_t* state_data, uint64_t* state_end)
   SHARED_REQUIRES(Locks::mutator_lock_) {
   std::map<ArtMethod*, std::string> pretty_method_cache;
-  std::string out_path_tmp = out_path + ".tmp";
+  std::string out_path_trace_tmp = out_path + ".trace.tmp";
   std::string out_path_timer = out_path + ".timer";
   std::string out_path_state = out_path + ".state";
-  std::ofstream out_trace(out_path_tmp, std::ofstream::trunc);
+  std::ofstream out_trace(out_path_trace_tmp, std::ofstream::trunc);
   std::ofstream out_timer(out_path_timer, std::ofstream::trunc);
   std::ofstream out_state(out_path_state, std::ofstream::trunc);
   int64_t* ptr = trace_data;
@@ -169,7 +169,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
       out_state << timestamp << ", "  << old_state << ", " << new_state << "\n";
     }
 
-    std::rename(out_path_tmp.c_str(), out_path.c_str());
+    std::rename(out_path_trace_tmp.c_str(), out_path.c_str());
   } else {
     LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
   }
