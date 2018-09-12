@@ -108,12 +108,12 @@ static const char* kThreadNameDuringStartup = "<native thread without managed pe
 void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, uint64_t* timer_data, uint64_t* timer_end, uint64_t* state_data, uint64_t* state_end)
   SHARED_REQUIRES(Locks::mutator_lock_) {
   std::map<ArtMethod*, std::string> pretty_method_cache;
-  std::string out_path_trace_tmp = out_path + ".trace.tmp";
+  std::string out_path_trace = out_path;
   std::string out_path_timer = out_path + ".timer";
   std::string out_path_state = out_path + ".state";
-  std::ofstream out_trace(out_path_trace_tmp, std::ofstream::trunc);
-  std::ofstream out_timer(out_path_timer, std::ofstream::trunc);
-  std::ofstream out_state(out_path_state, std::ofstream::trunc);
+  std::ofstream out_trace_tmp(out_path_trace + ".tmp", std::ofstream::trunc);
+  std::ofstream out_timer_tmp(out_path_timer + ".tmp", std::ofstream::trunc);
+  std::ofstream out_state_tmp(out_path_state + ".tmp", std::ofstream::trunc);
   int64_t* ptr = trace_data;
   uint64_t timer_ticks_per_second = ticks_per_second();
   uint64_t seconds_to_nanoseconds = 1000000000;
@@ -121,7 +121,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
   uint64_t first_timestamp = 0;
   uint64_t* timer_ptr = timer_data;
   uint64_t* state_ptr = state_data;
-  if (out_trace.is_open()) {
+  if (out_trace_tmp.is_open()) {
     while (ptr < end) {
       ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
       std::string pretty_method;
@@ -144,7 +144,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
       }
       int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
-      out_trace << timestamp << ":" << pretty_method << "\n";
+      out_trace_tmp << timestamp << ":" << pretty_method << "\n";
     }
     while (timer_ptr < timer_end) {
       uint64_t timestamp = reinterpret_cast<uint64_t>(*timer_ptr++);
@@ -157,7 +157,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
       uint64_t objects = reinterpret_cast<uint64_t>(*timer_ptr++);
       uint64_t thread_alloc = reinterpret_cast<uint64_t>(*timer_ptr++);
       uint64_t thread_free = reinterpret_cast<uint64_t>(*timer_ptr++);
-      out_timer << timestamp << ", " << signal_time << ", " << maj_pf << ", " << min_pf << ", " << ctx_swtich
+      out_timer_tmp << timestamp << ", " << signal_time << ", " << maj_pf << ", " << min_pf << ", " << ctx_swtich
       << ", "<< bytes << ", " << objects << ", "<< thread_alloc << ", " << thread_free << "\n";
     }
 
@@ -166,10 +166,12 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
       uint64_t old_state = reinterpret_cast<uint64_t>(*state_ptr++);
       uint64_t new_state = reinterpret_cast<uint64_t>(*state_ptr++);
-      out_state << timestamp << ", "  << old_state << ", " << new_state << "\n";
+      out_state_tmp << timestamp << ", "  << old_state << ", " << new_state << "\n";
     }
 
-    std::rename(out_path_trace_tmp.c_str(), out_path.c_str());
+    std::rename((out_path_timer + ".tmp").c_str(), out_path_timer.c_str());
+    std::rename((out_path_state + ".tmp").c_str(), out_path_state.c_str());
+    std::rename((out_path_trace + ".tmp").c_str(), out_path_trace.c_str());
   } else {
     LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
   }

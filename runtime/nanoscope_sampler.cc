@@ -160,7 +160,7 @@ void NanoscopeSampler::StartSampling(Thread* t, SampleMode sample_mode){
   set_up_timer();
 
   // Set up perf_event counters used to gather sampling data
-  // All counters are in the same perf_event graoup, with the leader being the first counter
+  // All counters are in the same perf_event group, with the leader being the first counter
   // so that we can read all of them at the same time
   set_up_sample_counter(0, -1, PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MAJ);
   set_up_sample_counter(1, sample_fd_[0], PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MIN);
