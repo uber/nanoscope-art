@@ -63,8 +63,8 @@ namespace art {
 class NanoscopePropertyWatcher {
  public:
   static void attach(std::string package_name) {
-    Thread* watching_thread_ = Thread::Current();
-    NanoscopePropertyWatcher* watcher = new NanoscopePropertyWatcher(watching_thread_, package_name);
+    Thread* monitored_thread_ = Thread::Current();
+    NanoscopePropertyWatcher* watcher = new NanoscopePropertyWatcher(monitored_thread_, package_name);
     watcher->watch();
   }
 
@@ -75,9 +75,9 @@ class NanoscopePropertyWatcher {
   std::string output_path_;
 
   // Thread current nanoscope watcher thread is monitoring
-  Thread* watching_thread_;
+  Thread* monitored_thread_;
 
-  explicit NanoscopePropertyWatcher(Thread* t, std::string _package_name) : package_name_(_package_name), watching_thread_(t) {}
+  explicit NanoscopePropertyWatcher(Thread* t, std::string _package_name) : package_name_(_package_name), monitored_thread_(t) {}
 
   void watch() {
     refresh_state(Thread::Current());
@@ -141,7 +141,7 @@ class NanoscopePropertyWatcher {
 
       start_tracing(self, output_dir_ + "/" + output_filename);
       if(sample_mode != kSampleDisabled){
-        NanoscopeSampler::StartSampling(watching_thread_, sample_mode);
+        NanoscopeSampler::StartSampling(monitored_thread_, sample_mode);
       }
     }
   }
@@ -163,7 +163,7 @@ class NanoscopePropertyWatcher {
 
     // Start Nanoscope tracing
     Locks::mutator_lock_->SharedLock(self);
-    watching_thread_->StartTracing();
+    monitored_thread_->StartTracing();
     Locks::mutator_lock_->SharedUnlock(self);
   }
 
@@ -175,7 +175,7 @@ class NanoscopePropertyWatcher {
 
     // Stop tracing
     Locks::mutator_lock_->SharedLock(self);
-    watching_thread_->StopTracing(output_path_);
+    monitored_thread_->StopTracing(output_path_);
     Locks::mutator_lock_->SharedUnlock(self);
     output_path_ = "";
   }

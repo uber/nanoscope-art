@@ -39,7 +39,6 @@ struct read_format {
 };
 
 const unsigned long PERF_PAGE_SIZE = sysconf(_SC_PAGESIZE);
-const int NUM_COUNTER = 3;
 
 // Right now we have 3 counters: # of major page faults, # of minor page
 // faults, # of context switches.

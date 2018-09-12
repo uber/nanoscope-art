@@ -23,7 +23,7 @@ SampleMode NanoscopeSampler::sample_mode_ = kSampleDisabled;
 #if defined(__ANDROID__)
 int64_t NanoscopeSampler::sample_interval_ = 1000000;         // 1000000ns
 int NanoscopeSampler::perf_timer_fd_ = -1;
-int NanoscopeSampler::sample_fd_ [] = { [0 ... (NUM_COUNTER - 1)] = -1 };
+int NanoscopeSampler::sample_fd_ [] = { [0 ... (COUNTER_TYPE_LIMIT - 1)] = -1 };
 struct perf_event_mmap_page* NanoscopeSampler::perf_timer_page_ = NULL;
 timer_t NanoscopeSampler::timer_id_ = 0;
 #endif
@@ -136,8 +136,8 @@ void NanoscopeSampler::signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *sigi
   char buf[4096];
   struct read_format* rf = (struct read_format*) buf;
   read(sample_fd_[0], buf, sizeof(buf));
-  uint64_t vals[NUM_COUNTER] = {0};
-  for(int i = 0; i < NUM_COUNTER; i++){
+  uint64_t vals[COUNTER_TYPE_LIMIT] = {0};
+  for(int i = 0; i < COUNTER_TYPE_LIMIT; i++){
     vals[i] = rf->values[i].value;
   }
 
@@ -211,7 +211,7 @@ void NanoscopeSampler::StopSampling(){
 
     // Delete perf_event counters used to gather sampling data
     ioctl(sample_fd_[0], PERF_EVENT_IOC_DISABLE, 0);
-    for(int i = 0; i < NUM_COUNTER; i++){
+    for(int i = 0; i < COUNTER_TYPE_LIMIT; i++){
       close(sample_fd_[i]);
       sample_fd_[i] = 0;
     }
@@ -224,7 +224,7 @@ void NanoscopeSampler::StopSampling(){
 
     // Delete perf_event counters used to gather sampling data
     ioctl(sample_fd_[0], PERF_EVENT_IOC_DISABLE, 0);
-    for(int i = 0; i < NUM_COUNTER; i++){
+    for(int i = 0; i < COUNTER_TYPE_LIMIT; i++){
       close(sample_fd_[i]);
       sample_fd_[i] = 0;
     }
