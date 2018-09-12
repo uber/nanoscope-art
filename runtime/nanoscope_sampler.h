@@ -39,10 +39,17 @@ struct read_format {
 };
 
 const unsigned long PERF_PAGE_SIZE = sysconf(_SC_PAGESIZE);
-// Total number of perf_event_counter to gather sampling data, change this when
-// add more counters. Right now we have 3: # of major page faults, # of minor page
-// faults, # of context switches.
 const int NUM_COUNTER = 3;
+
+// Right now we have 3 counters: # of major page faults, # of minor page
+// faults, # of context switches.
+enum CounterType {
+  COUNTER_TYPE_MAJOR_PAGE_FAULTS = 0,
+  COUNTER_TYPE_MINOR_PAGE_FAULTS,
+  COUNTER_TYPE_CONTEXT_SWITCHES,
+  // ===============================
+  COUNTER_TYPE_LIMIT            // total number of counters
+};
 
 enum SampleMode {
   kSampleDisabled,              // Sampling disabled
@@ -73,14 +80,14 @@ private:
   static timer_t timer_id_;
 
   // fds of perf_event counters used to gather sampling data.
-  static int sample_fd_[NUM_COUNTER];
+  static int sample_fd_[COUNTER_TYPE_LIMIT];
   // Set up signal handler for SIGPROF
   static void signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo ATTRIBUTE_UNUSED, void *ucontext ATTRIBUTE_UNUSED);
   // Install the correct sighandler
   static void install_sig_handler();
 
   // Set up perf_event counters used to gather sampling data
-  static void set_up_sample_counter(int counter_index, int groupfd, uint32_t type, uint64_t config);
+  static void set_up_sample_counter(CounterType counter_type, int groupfd);
 #endif
   // Set up the sampling signal timer based on the timer mode
   static void set_up_timer();

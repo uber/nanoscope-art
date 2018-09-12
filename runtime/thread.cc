@@ -181,33 +181,8 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
 }
 
 void Thread::TraceStart(ArtMethod* method) {
-  if (method->is_trace_enabled) {  // Only trace if we haven't blacklisted the ArtMethod. We could use compiler hint to favor blacklisted method performance. However, at time of writing blacklisting is infrequently used.
-    if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {  // Only trace if we're on the correct Thread. Use compiler hint to favor the performance of the traced Thread.
-      *tlsPtr_.trace_data_ptr++ = reinterpret_cast<int64_t>(method);
-      *tlsPtr_.trace_data_ptr++ = generic_timer_count();
-    }
-  }
-}
-
-void Thread::TraceEnd(ArtMethod* method) {
-  if (method->is_trace_enabled) {
-    if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {
-      *tlsPtr_.trace_data_ptr++ = 0;
-      *tlsPtr_.trace_data_ptr++ = generic_timer_count();
-    }
-  }
-}
-
-void Thread::TraceStartNative(ArtMethod* method){
-  if(LIKELY(tlsPtr_.trace_data_ptr != nullptr)){
+  if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {  // Only trace if we're on the correct Thread. Use compiler hint to favor the performance of the traced Thread.
     *tlsPtr_.trace_data_ptr++ = reinterpret_cast<int64_t>(method);
-    *tlsPtr_.trace_data_ptr++ = generic_timer_count();
-  }
-}
-
-void Thread::TraceEndNative(){
-  if(LIKELY(tlsPtr_.trace_data_ptr != nullptr)){
-    *tlsPtr_.trace_data_ptr++ = 0;
     *tlsPtr_.trace_data_ptr++ = generic_timer_count();
   }
 }

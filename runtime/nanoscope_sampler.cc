@@ -92,8 +92,27 @@ if(sample_mode_ == kSamplePerf){
 }
 
 #if defined(__ANDROID__)
-void NanoscopeSampler::set_up_sample_counter(int counter_index, int groupfd,
-  uint32_t type, uint64_t config){
+void NanoscopeSampler::set_up_sample_counter(CounterType counter_type, int groupfd){
+  uint64_t type, config;
+  switch(counter_type){
+    case COUNTER_TYPE_MAJOR_PAGE_FAULTS:
+      type = PERF_TYPE_SOFTWARE;
+      config = PERF_COUNT_SW_PAGE_FAULTS_MAJ;
+      break;
+    case COUNTER_TYPE_MINOR_PAGE_FAULTS:
+      type = PERF_TYPE_SOFTWARE;
+      config = PERF_COUNT_SW_PAGE_FAULTS_MIN;
+      break;
+    case COUNTER_TYPE_CONTEXT_SWITCHES:
+      type = PERF_TYPE_SOFTWARE;
+      config = PERF_COUNT_SW_CONTEXT_SWITCHES;
+      break;
+    default:
+      LOG(ERROR) << "nanoscope: wrong counter type";
+      return;
+  }
+
+  // Set up counter
   struct perf_event_attr pe;
   memset(&pe, 0, sizeof(struct perf_event_attr));
   pe.type = type;
@@ -103,13 +122,13 @@ void NanoscopeSampler::set_up_sample_counter(int counter_index, int groupfd,
   pe.disabled = 1;
 
   // Pid = tracing thread's tid, cpuid = -1. Counts tracing thread on any cpu.
-  sample_fd_[counter_index] = perf_event_open(pe, sampling_thread_->GetTid(), -1, groupfd, 0);
-  if (sample_fd_[counter_index] < 0) {
+  sample_fd_[counter_type] = perf_event_open(pe, sampling_thread_->GetTid(), -1, groupfd, 0);
+  if (sample_fd_[counter_type] < 0) {
     LOG(ERROR) << "nanoscope: Fail to open perf event file: slave ";
     LOG(ERROR) << "nanoscope: " << strerror(errno);
     return;
   }
-  fcntl(sample_fd_[counter_index], F_SETFL, O_ASYNC);
+  fcntl(sample_fd_[counter_type], F_SETFL, O_ASYNC);
 }
 
 void NanoscopeSampler::signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo ATTRIBUTE_UNUSED, void *ucontext ATTRIBUTE_UNUSED) {
@@ -162,9 +181,9 @@ void NanoscopeSampler::StartSampling(Thread* t, SampleMode sample_mode){
   // Set up perf_event counters used to gather sampling data
   // All counters are in the same perf_event group, with the leader being the first counter
   // so that we can read all of them at the same time
-  set_up_sample_counter(0, -1, PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MAJ);
-  set_up_sample_counter(1, sample_fd_[0], PERF_TYPE_SOFTWARE, PERF_COUNT_SW_PAGE_FAULTS_MIN);
-  set_up_sample_counter(2, sample_fd_[0], PERF_TYPE_SOFTWARE, PERF_COUNT_SW_CONTEXT_SWITCHES);
+  set_up_sample_counter(COUNTER_TYPE_MAJOR_PAGE_FAULTS, -1);
+  set_up_sample_counter(COUNTER_TYPE_MINOR_PAGE_FAULTS, sample_fd_[0]);
+  set_up_sample_counter(COUNTER_TYPE_CONTEXT_SWITCHES, sample_fd_[0]);
 
   // Enable allocation stats counter
   Runtime::Current()->SetStatsEnabled(true);
