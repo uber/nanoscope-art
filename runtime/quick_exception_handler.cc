@@ -128,7 +128,7 @@ class CatchBlockStackVisitor FINAL : public StackVisitor {
 
       // When an exception is thrown from compiled code, we need to account for the skipped frames in our trace.
       // While walking up the stack to find the corresponding catch block, we also pop our trace frames.
-      GetThread()->TraceEnd(method);
+      GetThread()->TraceEnd();
     }
     return true;  // Continue stack walk.
   }

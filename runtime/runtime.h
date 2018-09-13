@@ -40,6 +40,7 @@
 #include "quick/quick_method_frame_info.h"
 #include "runtime_stats.h"
 #include "safe_map.h"
+#include "monitor_event.h"
 
 namespace art {
 
@@ -654,6 +655,30 @@ class Runtime {
     return env_snapshot_.GetSnapshot();
   }
 
+  pid_t MonitorTracingPid() const{
+    return monitor_tracing_pid_;
+  }
+
+  void StartMonitorTracing(pid_t pid) {
+    monitor_tracing_pid_ = pid;
+    monitor_events_ = new NanoMonitorEvent* [40000];
+  }
+
+  void StopMonitorTracing(){
+    monitor_tracing_pid_ = 0;
+  }
+
+  void ClearMonitorTracing(){
+    delete [] monitor_events_;
+  }
+
+  void LogMonitorEvent(NanoMonitorEvent* event){
+    int write_idx = monitor_events_index_++;
+    monitor_events_[write_idx] = event;
+  }
+
+  void FlushMonitorEvents(std::string out_path);
+
  private:
   static void InitPlatformSignalHandlers();
 
@@ -877,6 +902,15 @@ class Runtime {
 
   // Whether zygote code is in a section that should not start threads.
   bool zygote_no_threads_;
+
+  // Pid of the process with monitor info tracing enabled
+  pid_t monitor_tracing_pid_;
+
+  // Array to store monitor events tracing data
+  NanoMonitorEvent** monitor_events_;
+
+  // Index of the next write in monitor_events_;
+  std::atomic<int> monitor_events_index_;
 
   // Saved environment.
   class EnvSnapshot {
