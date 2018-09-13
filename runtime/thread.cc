@@ -19,7 +19,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/resource.h>
-#include <sys/time.h>
+
 
 #include <algorithm>
 #include <bitset>
@@ -105,80 +105,23 @@ constexpr size_t kStackOverflowProtectedSize = 4 * kMemoryToolStackGuardSizeScal
 
 static const char* kThreadNameDuringStartup = "<native thread without managed peer>";
 
-// Returns the Generic Timer count. This uses the same timer register used in the compiled code instrumentation.
-uint64_t ALWAYS_INLINE generic_timer_count() {
-  uint64_t t = 0;
-#if defined(__arm__)
-  uint32_t t1, t2;
-  asm volatile("mrrc p15, 1, %0, %1, c14" : "=r"(t1), "=r"(t2));
-  t = t2;
-  t = t << 32 | t1;
-#elif defined(__aarch64__)
-  asm volatile("mrs %0, cntvct_el0" : "=r"(t));
-#elif defined(__i386)
-  unsigned int lo, hi;
-  asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
-  t = ((uint64_t)hi << 32) | lo;
-#endif
-  return t;
-}
-
-#if defined(__i386)
-// This method calculates ticks per second by comparing the built-in clock time to timer count. We call this
-// only once right before converting all trace timestamps, so this will produce inaccurate results if the
-// current frequency differs from the frequency of the clock when the timestamps were recorded. It's preferable
-// to query the frequency directly if available on the CPU architecture.
-uint64_t calculate_ticks_per_second() {
-  struct timeval start_clock_ts;
-  struct timeval end_clock_ts;
-
-  uint64_t start_timer = generic_timer_count();
-  gettimeofday(&start_clock_ts, nullptr);
-
-  usleep(100 * 1000);
-
-  uint64_t end_timer = generic_timer_count();
-  gettimeofday(&end_clock_ts, nullptr);
-
-  uint64_t start_clock_micro = (uint64_t) start_clock_ts.tv_usec;
-  uint64_t end_clock_micro = (uint64_t) end_clock_ts.tv_usec;
-
-  uint64_t timer_ticks = end_timer - start_timer;
-  uint64_t clock_duration_micro = end_clock_micro - start_clock_micro;
-
-  uint64_t ticks_per_second = timer_ticks / clock_duration_micro * 1000 * 1000;
-  return ticks_per_second;
-}
-#endif
-
-// Read the frequency of the generic timer. The register is typically only set during system boot only. So only need to check once.
-uint64_t ALWAYS_INLINE ticks_per_second() {
-  uint64_t t = 0;
-#if defined(__arm__)
-  uint32_t cntfrq;
-  asm volatile("mrc p15, 0, %0, c14, c0, 0" : "=r" (cntfrq));
-  t = cntfrq;
-#elif defined(__aarch64__)
-  uint64_t cntfrq_el0 = 0;
-  asm volatile("mrs %0, cntfrq_el0" : "=r" (cntfrq_el0));
-  t = cntfrq_el0;
-#elif defined(__i386)
-  t = calculate_ticks_per_second();
-#endif
-  return t;
-}
-
-void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
+void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, uint64_t* timer_data, uint64_t* timer_end, uint64_t* state_data, uint64_t* state_end)
   SHARED_REQUIRES(Locks::mutator_lock_) {
   std::map<ArtMethod*, std::string> pretty_method_cache;
-  std::string out_path_tmp = out_path + ".tmp";
-  std::ofstream out(out_path_tmp, std::ofstream::trunc);
+  std::string out_path_trace = out_path;
+  std::string out_path_timer = out_path + ".timer";
+  std::string out_path_state = out_path + ".state";
+  std::ofstream out_trace_tmp(out_path_trace + ".tmp", std::ofstream::trunc);
+  std::ofstream out_timer_tmp(out_path_timer + ".tmp", std::ofstream::trunc);
+  std::ofstream out_state_tmp(out_path_state + ".tmp", std::ofstream::trunc);
   int64_t* ptr = trace_data;
   uint64_t timer_ticks_per_second = ticks_per_second();
   uint64_t seconds_to_nanoseconds = 1000000000;
 
   uint64_t first_timestamp = 0;
-  if (out.is_open()) {
+  uint64_t* timer_ptr = timer_data;
+  uint64_t* state_ptr = state_data;
+  if (out_trace_tmp.is_open()) {
     while (ptr < end) {
       ArtMethod* method = reinterpret_cast<ArtMethod*>(*ptr++);
       std::string pretty_method;
@@ -200,34 +143,47 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end)
         }
       }
       int64_t timestamp = reinterpret_cast<int64_t>(*ptr++);
-      if (UNLIKELY(first_timestamp == 0)) {
-        first_timestamp = timestamp;
-      }
       timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
-      out << timestamp << ":" << pretty_method << "\n";
+      out_trace_tmp << timestamp << ":" << pretty_method << "\n";
     }
-    std::rename(out_path_tmp.c_str(), out_path.c_str());
+    while (timer_ptr < timer_end) {
+      uint64_t timestamp = reinterpret_cast<uint64_t>(*timer_ptr++);
+      timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
+      uint64_t signal_time = reinterpret_cast<uint64_t>(*timer_ptr++);
+      uint64_t maj_pf = reinterpret_cast<uint64_t>(*timer_ptr++);
+      uint64_t min_pf = reinterpret_cast<uint64_t>(*timer_ptr++);
+      uint64_t ctx_swtich = reinterpret_cast<uint64_t>(*timer_ptr++);
+      uint64_t bytes = reinterpret_cast<uint64_t>(*timer_ptr++);
+      uint64_t objects = reinterpret_cast<uint64_t>(*timer_ptr++);
+      uint64_t thread_alloc = reinterpret_cast<uint64_t>(*timer_ptr++);
+      uint64_t thread_free = reinterpret_cast<uint64_t>(*timer_ptr++);
+      out_timer_tmp << timestamp << ", " << signal_time << ", " << maj_pf << ", " << min_pf << ", " << ctx_swtich
+      << ", "<< bytes << ", " << objects << ", "<< thread_alloc << ", " << thread_free << "\n";
+    }
+
+    while (state_ptr < state_end) {
+      uint64_t timestamp = reinterpret_cast<uint64_t>(*state_ptr++);
+      timestamp = static_cast<uint64_t>((timestamp - first_timestamp) * (seconds_to_nanoseconds / static_cast<double>(timer_ticks_per_second)));
+      uint64_t old_state = reinterpret_cast<uint64_t>(*state_ptr++);
+      uint64_t new_state = reinterpret_cast<uint64_t>(*state_ptr++);
+      out_state_tmp << timestamp << ", "  << old_state << ", " << new_state << "\n";
+    }
+
+    std::rename((out_path_timer + ".tmp").c_str(), out_path_timer.c_str());
+    std::rename((out_path_state + ".tmp").c_str(), out_path_state.c_str());
+    std::rename((out_path_trace + ".tmp").c_str(), out_path_trace.c_str());
   } else {
     LOG(ERROR) << "Failed to open trace file: " << strerror(errno);
   }
   delete[] trace_data;
+  delete[] timer_data;
+  delete[] state_data;
 }
 
 void Thread::TraceStart(ArtMethod* method) {
-  if (method->is_trace_enabled) {  // Only trace if we haven't blacklisted the ArtMethod. We could use compiler hint to favor blacklisted method performance. However, at time of writing blacklisting is infrequently used.
-    if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {  // Only trace if we're on the correct Thread. Use compiler hint to favor the performance of the traced Thread.
-      *tlsPtr_.trace_data_ptr++ = reinterpret_cast<int64_t>(method);
-      *tlsPtr_.trace_data_ptr++ = generic_timer_count();
-    }
-  }
-}
-
-void Thread::TraceEnd(ArtMethod* method) {
-  if (method->is_trace_enabled) {
-    if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {
-      *tlsPtr_.trace_data_ptr++ = 0;
-      *tlsPtr_.trace_data_ptr++ = generic_timer_count();
-    }
+  if (LIKELY(tlsPtr_.trace_data_ptr != nullptr)) {  // Only trace if we're on the correct Thread. Use compiler hint to favor the performance of the traced Thread.
+    *tlsPtr_.trace_data_ptr++ = reinterpret_cast<int64_t>(method);
+    *tlsPtr_.trace_data_ptr++ = generic_timer_count();
   }
 }
 
@@ -263,9 +219,13 @@ void Thread::TraceEnd() {
 }
 
 void Thread::StartTracing() {
-  LOG(INFO) << "nanoscope: Trace started.";
-  tlsPtr_.trace_data = new int64_t[40000000];  // Enough room for 10M methods
+  LOG(INFO) << "nanoscope: Trace started, thread " << GetTid();
+  tlsPtr_.trace_data = new int64_t[40000000];   // Enough room for 10M methods
   tlsPtr_.trace_data_ptr = tlsPtr_.trace_data;
+  tlsPtr_.timer_data = new uint64_t[1000000];   // Enough for 20s of sampling
+  tlsPtr_.timer_data_ptr = tlsPtr_.timer_data;
+  tlsPtr_.state_data = new uint64_t[1000000];
+  tlsPtr_.state_data_ptr = tlsPtr_.state_data;
 }
 
 void Thread::StopTracing(std::string out_path) {
@@ -279,14 +239,17 @@ void Thread::StopTracing(std::string out_path) {
   CHECK(ret != -1);
 
   LOG(INFO) << "nanoscope: Flushing trace data to: " << out_path;
-
   if (kIsDebugBuild) {
-    flush_trace_data(out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr);
+    flush_trace_data(out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tlsPtr_.timer_data,tlsPtr_.timer_data_ptr, tlsPtr_.state_data, tlsPtr_.state_data_ptr);
   } else {
-    new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr);
+    new std::thread(flush_trace_data, out_path, tlsPtr_.trace_data, tlsPtr_.trace_data_ptr, tlsPtr_.timer_data, tlsPtr_.timer_data_ptr, tlsPtr_.state_data, tlsPtr_.state_data_ptr);
   }
   tlsPtr_.trace_data = nullptr;
   tlsPtr_.trace_data_ptr = nullptr;
+  tlsPtr_.timer_data = nullptr;
+  tlsPtr_.timer_data_ptr = nullptr;
+  tlsPtr_.state_data = nullptr;
+  tlsPtr_.state_data_ptr = nullptr;
 
   // A race condition exists if we stop tracing from a different Thread. In Thread::TraceStart and Thread::TraceEnd
   // we may end up incrementing and dereferencing trace_data_ptr after we've nulled it out above. If we hit this race
@@ -299,8 +262,49 @@ void Thread::StopTracing(std::string out_path) {
     usleep(1000 * 100);
     tlsPtr_.trace_data = nullptr;
     tlsPtr_.trace_data_ptr = nullptr;
+    tlsPtr_.timer_data = nullptr;
+    tlsPtr_.timer_data_ptr = nullptr;
+    tlsPtr_.state_data = nullptr;
+    tlsPtr_.state_data_ptr = nullptr;
   }
 }
+
+void Thread::TimerHandler(uint64_t time, uint64_t maj_pf, uint64_t min_pf, uint64_t ctx_swtich){
+  if(tlsPtr_.timer_data_ptr != nullptr){
+    *tlsPtr_.timer_data_ptr ++ = generic_timer_count();
+    *tlsPtr_.timer_data_ptr ++ = time;
+    *tlsPtr_.timer_data_ptr ++ = maj_pf;
+    *tlsPtr_.timer_data_ptr ++ = min_pf;
+    *tlsPtr_.timer_data_ptr ++ = ctx_swtich;
+
+    // Get allocation info
+    RuntimeStats* global_stats = Runtime::Current()->GetStats();
+    if(global_stats -> allocated_bytes > global_stats->freed_bytes){
+      *tlsPtr_.timer_data_ptr ++ = global_stats->allocated_bytes - global_stats->freed_bytes;
+    } else {
+      *tlsPtr_.timer_data_ptr ++ = 0;
+    }
+    if(global_stats->allocated_objects > global_stats->freed_objects){
+      *tlsPtr_.timer_data_ptr ++ = global_stats->allocated_objects - global_stats->freed_objects;
+    } else {
+      *tlsPtr_.timer_data_ptr ++ = 0;
+    }
+    RuntimeStats* thread_stats = GetStats();
+    *tlsPtr_.timer_data_ptr ++ = thread_stats->allocated_bytes;
+    *tlsPtr_.timer_data_ptr ++ = thread_stats->freed_bytes;
+  } else {
+    LOG(INFO) << "nanoscope: wrong thread" << "\n";
+  }
+}
+
+void Thread::LogStateTransition(ThreadState old_state, ThreadState new_state){
+  if(tlsPtr_.state_data_ptr != nullptr){
+    *tlsPtr_.state_data_ptr ++ = generic_timer_count();
+    *tlsPtr_.state_data_ptr ++ = old_state;
+    *tlsPtr_.state_data_ptr ++ = new_state;
+  }
+}
+
 
 void Thread::InitCardTable() {
   tlsPtr_.card_table = Runtime::Current()->GetHeap()->GetCardTable()->GetBiasedBegin();

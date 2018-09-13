@@ -89,6 +89,7 @@ inline ThreadState Thread::SetState(ThreadState new_state) {
   union StateAndFlags old_state_and_flags;
   old_state_and_flags.as_int = tls32_.state_and_flags.as_int;
   CHECK_NE(old_state_and_flags.as_struct.state, kRunnable);
+  Thread::Current()->LogStateTransition(static_cast<ThreadState>(old_state_and_flags.as_struct.state), new_state);
   tls32_.state_and_flags.as_struct.state = new_state;
   return static_cast<ThreadState>(old_state_and_flags.as_struct.state);
 }
@@ -161,6 +162,7 @@ inline void Thread::PassActiveSuspendBarriers() {
 inline void Thread::TransitionFromRunnableToSuspended(ThreadState new_state) {
   AssertThreadSuspensionIsAllowable();
   DCHECK_EQ(this, Thread::Current());
+  Thread::Current()->LogStateTransition(kRunnable, new_state);
   // Change to non-runnable state, thereby appearing suspended to the system.
   TransitionToSuspendedAndRunCheckpoints(new_state);
   // Mark the release of the share of the mutator_lock_.
@@ -174,6 +176,7 @@ inline ThreadState Thread::TransitionFromSuspendedToRunnable() {
   old_state_and_flags.as_int = tls32_.state_and_flags.as_int;
   int16_t old_state = old_state_and_flags.as_struct.state;
   DCHECK_NE(static_cast<ThreadState>(old_state), kRunnable);
+  Thread::Current()->LogStateTransition(static_cast<ThreadState>(old_state), kRunnable);
   do {
     Locks::mutator_lock_->AssertNotHeld(this);  // Otherwise we starve GC..
     old_state_and_flags.as_int = tls32_.state_and_flags.as_int;

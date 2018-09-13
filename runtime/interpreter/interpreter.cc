@@ -319,12 +319,12 @@ static inline JValue Execute(
         // No Mterp variant - just use the switch interpreter.
         result_register = ExecuteSwitchImpl<false, true>(self, code_item, shadow_frame, result_register,
                                               false);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       } else if (UNLIKELY(!Runtime::Current()->IsStarted())) {
         result_register = ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register,
                                                false);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       } else {
         while (true) {
@@ -332,19 +332,19 @@ static inline JValue Execute(
           if (MterpShouldSwitchInterpreters()) {
             result_register = ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register,
                                                    false);
-            self->TraceEnd(method);
+            self->TraceEnd();
             return result_register;
           }
           bool returned = ExecuteMterpImpl(self, code_item, &shadow_frame, &result_register);
           if (returned) {
-            self->TraceEnd(method);
+            self->TraceEnd();
             return result_register;
           } else {
             // Mterp didn't like that instruction.  Single-step it with the reference interpreter.
             result_register = ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame,
                                                                result_register, true);
             if (shadow_frame.GetDexPC() == DexFile::kDexNoIndex) {
-              self->TraceEnd(method);
+              self->TraceEnd();
               // Single-stepped a return or an exception not handled locally.  Return to caller.
               return result_register;
             }
@@ -355,23 +355,23 @@ static inline JValue Execute(
       if (transaction_active) {
         result_register = ExecuteSwitchImpl<false, true>(self, code_item, shadow_frame, result_register,
                                               false);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       } else {
         result_register = ExecuteSwitchImpl<false, false>(self, code_item, shadow_frame, result_register,
                                                false);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       }
     } else {
       DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
       if (transaction_active) {
         result_register = ExecuteGotoImpl<false, true>(self, code_item, shadow_frame, result_register);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       } else {
         result_register = ExecuteGotoImpl<false, false>(self, code_item, shadow_frame, result_register);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       }
     }
@@ -382,35 +382,35 @@ static inline JValue Execute(
       if (transaction_active) {
         result_register = ExecuteSwitchImpl<true, true>(self, code_item, shadow_frame, result_register,
                                              false);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       } else {
         result_register = ExecuteSwitchImpl<true, false>(self, code_item, shadow_frame, result_register,
                                               false);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       }
     } else if (kInterpreterImplKind == kSwitchImplKind) {
       if (transaction_active) {
         result_register = ExecuteSwitchImpl<true, true>(self, code_item, shadow_frame, result_register,
                                              false);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       } else {
         result_register = ExecuteSwitchImpl<true, false>(self, code_item, shadow_frame, result_register,
                                               false);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       }
     } else {
       DCHECK_EQ(kInterpreterImplKind, kComputedGotoImplKind);
       if (transaction_active) {
         result_register = ExecuteGotoImpl<true, true>(self, code_item, shadow_frame, result_register);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       } else {
         result_register = ExecuteGotoImpl<true, false>(self, code_item, shadow_frame, result_register);
-        self->TraceEnd(method);
+        self->TraceEnd();
         return result_register;
       }
     }
