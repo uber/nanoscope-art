@@ -624,6 +624,10 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
                           // the single Lock() we do afterwards.
   AtraceMonitorLock(self, GetObject(), true /* is_wait */);
 
+  // Monitor tracing info
+  pid_t tracing_pid = Runtime::Current()->MonitorTracingPid();
+  uint64_t sleep_ts = 0;
+
   bool was_interrupted = false;
   {
     // Update thread state. If the GC wakes up, it'll ignore us, knowing
@@ -648,6 +652,11 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
     if (self->IsInterruptedLocked()) {
       was_interrupted = true;
     } else {
+      // Update monitor tracing info
+      if(tracing_pid != 0 && getpid() == tracing_pid){
+        sleep_ts = generic_timer_ts();
+      }
+
       // Wait for a notification or a timeout to occur.
       if (why == kWaiting) {
         self->GetWaitConditionVariable()->Wait(self);
@@ -688,6 +697,28 @@ void Monitor::Wait(Thread* self, int64_t ms, int32_t ns,
   }
 
   AtraceMonitorUnlock();  // End Wait().
+
+  if(tracing_pid != 0 && getpid() == tracing_pid && sleep_ts != 0){
+    pid_t tid = self->GetTid();
+    mirror::Object* obj = GetObject();
+    uint64_t duration = generic_timer_ts() - sleep_ts;
+    if(duration / 1000000 > 500){
+      // Long wait, walk the stack to get caller information
+      NthCallerWithDexPcVisitor visitor(self, 1U);
+      visitor.WalkStack(false);
+      const char* filename;
+      int32_t line_number;
+      TranslateLocation(visitor.method_, visitor.dex_pc_, &filename, &line_number);
+      std::stringstream ss;
+      ss <<  PrettyMethod(visitor.method_) << "(" << (filename != nullptr ? filename : "null") << ":" << line_number << ")";
+      std::string location = ss.str();
+      NanoMonitorEvent* event = new NanoMonitorEvent(NanoMonitorEvent::kMonitorWait, tid, sleep_ts, obj, duration, location);
+      Runtime::Current()->LogMonitorEvent(event);
+    } else {
+      NanoMonitorEvent* event = new NanoMonitorEvent(NanoMonitorEvent::kMonitorWait, tid, sleep_ts, obj, duration);
+      Runtime::Current()->LogMonitorEvent(event);
+    }
+  }
 
   // Re-acquire the monitor and lock.
   Lock(self);
@@ -824,8 +855,15 @@ void Monitor::InflateThinLocked(Thread* self, Handle<mirror::Object> obj, LockWo
                                 uint32_t hash_code) {
   DCHECK_EQ(lock_word.GetState(), LockWord::kThinLocked);
   uint32_t owner_thread_id = lock_word.ThinLockOwner();
+  pid_t tracing_pid = Runtime::Current()->MonitorTracingPid();
   if (owner_thread_id == self->GetThreadId()) {
     // We own the monitor, we can easily inflate it.
+    if(tracing_pid != -1 && getpid() == tracing_pid){
+      uint64_t tid = self->GetTid();
+      uint64_t ts = generic_timer_ts();
+      NanoMonitorEvent* event = new NanoMonitorEvent(NanoMonitorEvent::kInflateRecursion, tid, ts, obj.Get());
+      Runtime::Current()->LogMonitorEvent(event);
+    }
     Inflate(self, self, obj.Get(), hash_code);
   } else {
     ThreadList* thread_list = Runtime::Current()->GetThreadList();
@@ -843,6 +881,12 @@ void Monitor::InflateThinLocked(Thread* self, Handle<mirror::Object> obj, LockWo
       if (lock_word.GetState() == LockWord::kThinLocked &&
           lock_word.ThinLockOwner() == owner_thread_id) {
         // Go ahead and inflate the lock.
+        if(tracing_pid != -1 && getpid() == tracing_pid){
+          uint64_t tid = self->GetTid();
+          uint64_t ts = generic_timer_ts();
+          NanoMonitorEvent* event = new NanoMonitorEvent(NanoMonitorEvent::kInflateContention, tid, ts, obj.Get());
+          Runtime::Current()->LogMonitorEvent(event);
+        }
         Inflate(self, owner, obj.Get(), hash_code);
       }
       thread_list->Resume(owner, false);
@@ -869,9 +913,14 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
   self->AssertThreadSuspensionIsAllowable();
   obj = FakeLock(obj);
   uint32_t thread_id = self->GetThreadId();
+  uint32_t tid = self->GetTid();
   size_t contention_count = 0;
   StackHandleScope<1> hs(self);
   Handle<mirror::Object> h_obj(hs.NewHandle(obj));
+  pid_t tracing_pid = Runtime::Current()->MonitorTracingPid();
+  bool log_monitor = false;
+  bool enter_fat = false;
+  uint64_t start_ts = 0;
   while (true) {
     LockWord lock_word = h_obj->GetLockWord(true);
     switch (lock_word.GetState()) {
@@ -880,6 +929,25 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
         if (h_obj->CasLockWordWeakSequentiallyConsistent(lock_word, thin_locked)) {
           AtraceMonitorLock(self, h_obj.Get(), false /* is_wait */);
           // CasLockWord enforces more than the acquire ordering we need here.
+          if(log_monitor && tracing_pid != -1 && getpid() == tracing_pid) {
+            uint64_t duration = generic_timer_ts() - start_ts;
+            if(duration / 1000000 > 50){
+              uint32_t pc;
+              ArtMethod* m = self->GetCurrentMethod(&pc);
+              const char* filename;
+              int32_t line_number;
+              TranslateLocation(m, pc, &filename, &line_number);
+              std::stringstream ss;
+              ss <<  PrettyMethod(m) << "(" << (filename != nullptr ? filename : "null") << ":" << line_number << ")";
+              std::string location = ss.str();
+              NanoMonitorEvent* event = new NanoMonitorEvent(enter_fat? NanoMonitorEvent::kAcquireFat : NanoMonitorEvent::kAcquireThin, tid, start_ts, obj, duration, location);
+              Runtime::Current()->LogMonitorEvent(event);
+            } else {
+              NanoMonitorEvent* event = new NanoMonitorEvent(enter_fat? NanoMonitorEvent::kAcquireFat : NanoMonitorEvent::kAcquireThin, tid, start_ts, obj, duration);
+              Runtime::Current()->LogMonitorEvent(event);
+            }
+          }
+
           return h_obj.Get();  // Success!
         }
         continue;  // Go again.
@@ -913,6 +981,10 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
             return nullptr;
           }
           // Contention.
+          if(tracing_pid != -1 && getpid() == tracing_pid && !log_monitor){
+            log_monitor = true;
+            start_ts = generic_timer_ts();
+          }
           contention_count++;
           Runtime* runtime = Runtime::Current();
           if (contention_count <= runtime->GetMaxSpinsBeforeThinkLockInflation()) {
@@ -933,14 +1005,49 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
         if (trylock) {
           return mon->TryLock(self) ? h_obj.Get() : nullptr;
         } else {
-          mon->Lock(self);
-          return h_obj.Get();  // Success!
+          if(tracing_pid != -1 && getpid() == tracing_pid && !log_monitor){
+            log_monitor = true;
+            enter_fat = true;
+            start_ts = generic_timer_ts();
+
+            // Try to get lock
+            mon->Lock(self);
+
+            // Lock got
+            uint64_t duration = generic_timer_ts() - start_ts;
+            if(duration / 1000000 > 50){
+              uint32_t pc;
+              ArtMethod* m = self->GetCurrentMethod(&pc);
+              const char* filename;
+              int32_t line_number;
+              TranslateLocation(m, pc, &filename, &line_number);
+              std::stringstream ss;
+              ss <<  PrettyMethod(m) << "(" << (filename != nullptr ? filename : "null") << ":" << line_number << ")";
+              std::string location = ss.str();
+              NanoMonitorEvent* event = new NanoMonitorEvent(enter_fat? NanoMonitorEvent::kAcquireFat : NanoMonitorEvent::kAcquireThin, tid, start_ts, obj, duration, location);
+              Runtime::Current()->LogMonitorEvent(event);
+            } else {
+              NanoMonitorEvent* event = new NanoMonitorEvent(enter_fat? NanoMonitorEvent::kAcquireFat : NanoMonitorEvent::kAcquireThin, tid, start_ts, obj, duration);
+              Runtime::Current()->LogMonitorEvent(event);
+            }
+            return h_obj.Get();  // Success!
+          } else {
+            mon->Lock(self);
+            return h_obj.Get();  // Success!
+          }
         }
       }
       case LockWord::kHashCode:
+      {
+        if(tracing_pid != -1 && getpid() == tracing_pid){
+          uint64_t ts = generic_timer_ts();
+          NanoMonitorEvent* event = new NanoMonitorEvent(NanoMonitorEvent::kInflateHash, tid, ts, obj);
+          Runtime::Current()->LogMonitorEvent(event);
+        }
         // Inflate with the existing hashcode.
         Inflate(self, nullptr, h_obj.Get(), lock_word.GetHashCode());
         continue;  // Start from the beginning.
+      }
       default: {
         LOG(FATAL) << "Invalid monitor state " << lock_word.GetState();
         UNREACHABLE();
@@ -1029,6 +1136,14 @@ void Monitor::Wait(Thread* self, mirror::Object *obj, int64_t ms, int32_t ns,
         } else {
           // We own the lock, inflate to enqueue ourself on the Monitor. May fail spuriously so
           // re-load.
+          pid_t tracing_pid = Runtime::Current()->MonitorTracingPid();
+          if(tracing_pid != -1 && getpid() == tracing_pid){
+            uint64_t tid = self->GetTid();
+            uint64_t ts = generic_timer_ts();
+            NanoMonitorEvent* event = new NanoMonitorEvent(NanoMonitorEvent::kInflateWait, tid, ts, obj);
+            Runtime::Current()->LogMonitorEvent(event);
+          }
+
           Inflate(self, self, obj, 0);
           lock_word = obj->GetLockWord(true);
         }

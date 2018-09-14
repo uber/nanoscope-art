@@ -38,6 +38,8 @@
 #include <vector>
 #include <fcntl.h>
 #include <unistd.h>
+#include <iostream>
+#include <fstream>
 
 #include "JniConstants.h"
 #include "ScopedLocalRef.h"
@@ -238,7 +240,10 @@ Runtime::Runtime()
       pruned_dalvik_cache_(false),
       // Initially assume we perceive jank in case the process state is never updated.
       process_state_(kProcessStateJankPerceptible),
-      zygote_no_threads_(false) {
+      zygote_no_threads_(false),
+      monitor_tracing_pid_(0),
+      monitor_events_(nullptr),
+      monitor_events_index_(0) {
   CheckAsmSupportOffsetsAndSizes();
   std::fill(callee_save_methods_, callee_save_methods_ + arraysize(callee_save_methods_), 0u);
   interpreter::CheckInterpreterAsmConstants();
@@ -246,6 +251,9 @@ Runtime::Runtime()
 
 Runtime::~Runtime() {
   ScopedTrace trace("Runtime shutdown");
+
+  ClearMonitorTracing();
+
   if (is_native_bridge_loaded_) {
     UnloadNativeBridge();
   }
@@ -2082,6 +2090,28 @@ void Runtime::EnvSnapshot::TakeSnapshot() {
 
 char** Runtime::EnvSnapshot::GetSnapshot() const {
   return c_env_vector_.get();
+}
+
+void Runtime::FlushMonitorEvents(std::string out_path){
+  std::ofstream os(out_path, std::ofstream::trunc);
+  os << "{" << std::endl << "\"traceEvents\": [" << std::endl;
+  NanoMonitorEvent* event;
+  if(monitor_events_index_ > 0){
+    event = monitor_events_[0];
+    os << *event;
+    delete event;
+    for(int i = 1; i < monitor_events_index_; i++){
+      event = monitor_events_[i];
+      os << "," << std::endl;
+      os << *event;
+      delete event;
+    }
+  }
+  os << std::endl << "]," << std::endl << "\"displayTimeUnit\":\"ns\"," << std::endl
+  << "\"meta_user\": \"uber\"," << std::endl <<  "\"meta_cpu\": \"2\"" << std::endl << "}";
+
+  os.close();
+  monitor_events_index_ = 0;
 }
 
 }  // namespace art

@@ -20,6 +20,7 @@
 #include "base/mutex.h"
 #include "thread.h"
 #include "utils.h"
+#include "runtime.h"
 #include <sstream>
 #include <string.h>
 #include <stdio.h>
@@ -77,7 +78,10 @@ class NanoscopePropertyWatcher {
   // Thread current nanoscope watcher thread is monitoring
   Thread* monitored_thread_;
 
-  explicit NanoscopePropertyWatcher(Thread* t, std::string _package_name) : package_name_(_package_name), monitored_thread_(t) {}
+  bool monitor_tracing_enabled_;
+
+  explicit NanoscopePropertyWatcher(Thread* t, std::string _package_name) : package_name_(_package_name)
+  , monitored_thread_(t), monitor_tracing_enabled_(false) {}
 
   void watch() {
     refresh_state(Thread::Current());
@@ -125,7 +129,12 @@ class NanoscopePropertyWatcher {
       }
 
       std::string timer_mode;
-      std::getline(ss, timer_mode);
+      std::string monitor_tracing = "";
+      if(std::getline(ss, timer_mode, ':')){
+        std::getline(ss, monitor_tracing);
+      } else {
+        std::getline(ss, timer_mode);
+      }
 
       SampleMode sample_mode;
       if(timer_mode == "perf_timer"){
@@ -138,6 +147,7 @@ class NanoscopePropertyWatcher {
         LOG(INFO) << "nanoscope: sampling disabled";
         sample_mode = kSampleDisabled;
       }
+      monitor_tracing_enabled_ = (monitor_tracing == "lock_tracing");
 
       start_tracing(self, output_dir_ + "/" + output_filename);
       if(sample_mode != kSampleDisabled){
@@ -165,12 +175,21 @@ class NanoscopePropertyWatcher {
     Locks::mutator_lock_->SharedLock(self);
     monitored_thread_->StartTracing();
     Locks::mutator_lock_->SharedUnlock(self);
+
+    if(monitor_tracing_enabled_){
+      // Set up lock info tracing
+      Runtime::Current()->StartMonitorTracing(monitored_thread_->GetTid());
+    }
   }
 
   void stop_tracing(Thread* self) {
     if (output_path_.empty()) {
       LOG(ERROR) << "nanoscope: No output path found.";
       return;
+    }
+    if(monitor_tracing_enabled_){
+      Runtime::Current()->StopMonitorTracing();
+      monitor_tracing_enabled_ = false;
     }
 
     // Stop tracing

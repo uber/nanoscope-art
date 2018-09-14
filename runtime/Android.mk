@@ -131,6 +131,7 @@ LIBART_COMMON_SRC_FILES := \
   mirror/string.cc \
   mirror/throwable.cc \
   monitor.cc \
+  monitor_event.cc \
   nanoscope_sampler.cc \
   native_bridge_art_interface.cc \
   native/dalvik_system_DexFile.cc \

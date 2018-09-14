@@ -111,12 +111,15 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
   std::string out_path_trace = out_path;
   std::string out_path_timer = out_path + ".timer";
   std::string out_path_state = out_path + ".state";
+  std::string out_path_lock = out_path + ".lock.json";
   std::ofstream out_trace_tmp(out_path_trace + ".tmp", std::ofstream::trunc);
   std::ofstream out_timer_tmp(out_path_timer + ".tmp", std::ofstream::trunc);
   std::ofstream out_state_tmp(out_path_state + ".tmp", std::ofstream::trunc);
   int64_t* ptr = trace_data;
   uint64_t timer_ticks_per_second = ticks_per_second();
   uint64_t seconds_to_nanoseconds = 1000000000;
+
+  Runtime::Current()->FlushMonitorEvents(out_path_lock + ".tmp");
 
   uint64_t first_timestamp = 0;
   uint64_t* timer_ptr = timer_data;
@@ -169,6 +172,7 @@ void flush_trace_data(std::string out_path, int64_t* trace_data, int64_t* end, u
       out_state_tmp << timestamp << ", "  << old_state << ", " << new_state << "\n";
     }
 
+    std::rename((out_path_lock + ".tmp").c_str(), out_path_lock.c_str());
     std::rename((out_path_timer + ".tmp").c_str(), out_path_timer.c_str());
     std::rename((out_path_state + ".tmp").c_str(), out_path_state.c_str());
     std::rename((out_path_trace + ".tmp").c_str(), out_path_trace.c_str());
