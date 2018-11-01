@@ -67,7 +67,7 @@ if(sample_mode_ == kSamplePerf){
     LOG(ERROR) << "nanoscope: Failed to set the owner of the perf event file";
     return;
   }
-} else if (sample_mode_ == kSampleCpu){
+} else if (sample_mode_ == kSampleCpu) {
   struct sigevent sev;
   struct itimerspec its;
   long long freq_nanosecs;
@@ -75,19 +75,21 @@ if(sample_mode_ == kSamplePerf){
   sev.sigev_signo = SIGTIMER;
   sev.sigev_notify_thread_id = sampling_thread_ -> GetTid();
   sev.sigev_value.sival_ptr = &timer_id_;
-  if (timer_create(CLOCK_THREAD_CPUTIME_ID, &sev, &timer_id_) == -1)
-    LOG(ERROR) << "nanoscope: Failed to create timer";;
-    freq_nanosecs = sample_interval_;   // 1ms
-    its.it_value.tv_sec = freq_nanosecs / 1000000000;
-    its.it_value.tv_nsec = freq_nanosecs % 1000000000;
-    its.it_interval.tv_sec = its.it_value.tv_sec;
-    its.it_interval.tv_nsec = its.it_value.tv_nsec;
-
-    if (timer_settime(timer_id_, 0, &its, NULL) == -1)
-      LOG(ERROR) << "nanoscope: Failed to set timer";;
-  } else {
-    UNREACHABLE();
+  if (timer_create(CLOCK_THREAD_CPUTIME_ID, &sev, &timer_id_) == -1) {
+    LOG(ERROR) << "nanoscope: Failed to create timer";
   }
+  freq_nanosecs = sample_interval_;   // 1ms
+  its.it_value.tv_sec = freq_nanosecs / 1000000000;
+  its.it_value.tv_nsec = freq_nanosecs % 1000000000;
+  its.it_interval.tv_sec = its.it_value.tv_sec;
+  its.it_interval.tv_nsec = its.it_value.tv_nsec;
+
+  if (timer_settime(timer_id_, 0, &its, NULL) == -1) {
+    LOG(ERROR) << "nanoscope: Failed to set timer";
+  }
+ } else {
+  UNREACHABLE();
+ }
 #endif
 }
 
@@ -133,13 +135,21 @@ void NanoscopeSampler::set_up_sample_counter(CounterType counter_type, int group
 
 void NanoscopeSampler::signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *siginfo ATTRIBUTE_UNUSED, void *ucontext ATTRIBUTE_UNUSED) {
   // Read perf_event sample values
-  char buf[4096];
-  struct read_format* rf = (struct read_format*) buf;
-  read(sample_fd_[0], buf, sizeof(buf));
-  uint64_t vals[COUNTER_TYPE_LIMIT] = {0};
-  for(int i = 0; i < COUNTER_TYPE_LIMIT; i++){
-    vals[i] = rf->values[i].value;
-  }
+  struct read_format rf;
+  int to_read_bytes = sizeof(struct read_format);
+  int read_bytes = 0;
+  do {
+    int r = read(sample_fd_[0], ((char*)(&rf))+read_bytes, to_read_bytes);    
+    if (r == to_read_bytes) {
+      break;
+    } else if (r == -1) {
+      LOG(ERROR) << "nanoscope: error get clock time";
+      return;
+    } else {
+      read_bytes += r;
+      to_read_bytes -= r;
+    }
+  } while (true);
 
   // Read thread CPU time
   struct timespec thread_cpu_time;
@@ -147,7 +157,8 @@ void NanoscopeSampler::signal_handler(int sigo ATTRIBUTE_UNUSED, siginfo_t *sigi
     LOG(ERROR) << "nanoscope: error get clock time";
   }
 
-  sampling_thread_ -> TimerHandler(thread_cpu_time.tv_sec * 1e+9 + thread_cpu_time.tv_nsec, vals[0], vals[1], vals[2]);
+  sampling_thread_ -> TimerHandler(thread_cpu_time.tv_sec * 1e+9 + thread_cpu_time.tv_nsec,
+				   rf.values[0].value, rf.values[1].value, rf.values[2].value);
 
   // Restart timer
   if(sample_mode_ == kSamplePerf){
@@ -189,8 +200,10 @@ void NanoscopeSampler::StartSampling(Thread* t, SampleMode sample_mode){
   Runtime::Current()->SetStatsEnabled(true);
 
   // Starts all counters
-  ioctl(perf_timer_fd_, PERF_EVENT_IOC_RESET, 0);
-  ioctl(perf_timer_fd_, PERF_EVENT_IOC_REFRESH, 1);
+  if(sample_mode_ == kSamplePerf){
+    ioctl(perf_timer_fd_, PERF_EVENT_IOC_RESET, 0);
+    ioctl(perf_timer_fd_, PERF_EVENT_IOC_REFRESH, 1);
+  }
   ioctl(sample_fd_[0], PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
   ioctl(sample_fd_[0], PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
 #endif
