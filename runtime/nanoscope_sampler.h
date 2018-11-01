@@ -29,17 +29,6 @@
 #define SIGTIMER (SIGPROF)
 
 namespace art{
-// Data structures defined to read perf_event counters in sighandler
-struct read_format {
-  uint64_t nr;
-  struct {
-    uint64_t value;
-    uint64_t id;
-  } values[];
-};
-
-const unsigned long PERF_PAGE_SIZE = sysconf(_SC_PAGESIZE);
-
 // Right now we have 3 counters: # of major page faults, # of minor page
 // faults, # of context switches.
 enum CounterType {
@@ -49,6 +38,17 @@ enum CounterType {
   // ===============================
   COUNTER_TYPE_LIMIT            // total number of counters
 };
+
+// Data structures defined to read perf_event counters in sighandler
+struct read_format {
+  uint64_t nr;
+  struct {
+    uint64_t value;
+    uint64_t id;
+  } values[COUNTER_TYPE_LIMIT];
+};
+
+const unsigned long PERF_PAGE_SIZE = sysconf(_SC_PAGESIZE);
 
 enum SampleMode {
   kSampleDisabled,              // Sampling disabled
