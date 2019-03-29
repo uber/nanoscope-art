@@ -656,8 +656,8 @@ make-release: $(ROM_ARCHIVE)
 	echo $(ROM_ARCHIVE)
 
 .PHONY: make-emulator-release
-make-emulator-release: $(ROM_EMULATOR_FILE)
-	echo $(ROM_EMULATOR_FILE)
+make-emulator-release: $(EMULATOR_ARCHIVE)
+	echo $(EMULATOR_ARCHIVE)
 
 TEST_ROM_DIR := $(ANDROID_PRODUCT_OUT)/nanoscope-rom-test
 
