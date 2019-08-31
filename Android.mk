@@ -600,7 +600,7 @@ VERSION_FILE := $(art_path)/version.txt
 ROM_VERSION := $(shell cat $(VERSION_FILE) | tr -d " \t\n\r" )
 
 ROM_ARCHIVE := $(OUT_DIR)/nanoscope-rom-$(ROM_VERSION).zip
-ROM_INSTALL_FILE := $(ANDROID_PRODUCT_OUT)/install.sh
+ROM_INSTALL_FILE := $(PRODUCT_OUT)/install.sh
 ROM_FILENAMES := \
   android-info.txt \
   ramdisk.img \
@@ -611,12 +611,13 @@ ROM_FILENAMES := \
   cache.img \
   ramdisk-recovery.img \
   system.img
-ROM_FILE_DEPENDENCIES := $(foreach file, $(ROM_FILENAMES), $(ANDROID_PRODUCT_OUT)/$(file))
+ROM_FILE_DEPENDENCIES := $(foreach file, $(ROM_FILENAMES), $(PRODUCT_OUT)/$(file))
 
-EMULATOR_ARCHIVE := $(ANDROID_PRODUCT_OUT)/nanoscope-emulator-$(ROM_VERSION).zip
-LAUNCH_EMULATOR_FILE := $(ANDROID_PRODUCT_OUT)/emulator.sh
-EMULATOR_CONFIG_FILE := $(ANDROID_PRODUCT_OUT)/config.ini
-EMULATOR_DUMMY_VENDOR_FILE := $(ANDROID_PRODUCT_OUT)/vendor.img
+EMULATOR_ARCHIVE_FILENAME := nanoscope-emulator-$(ROM_VERSION).zip
+EMULATOR_ARCHIVE := $(PRODUCT_OUT)/$(EMULATOR_ARCHIVE_FILENAME)
+LAUNCH_EMULATOR_FILE := $(PRODUCT_OUT)/emulator.sh
+EMULATOR_CONFIG_FILE := $(PRODUCT_OUT)/config.ini
+EMULATOR_DUMMY_VENDOR_FILE := $(PRODUCT_OUT)/vendor.img
 EMULATOR_FILENAMES := \
   cache.img \
   config.ini \
@@ -625,7 +626,7 @@ EMULATOR_FILENAMES := \
   vendor.img \
   system.img \
   system/build.prop
-EMULATOR_FILE_DEPENDENCIES := $(foreach file, $(EMULATOR_FILENAMES), $(ANDROID_PRODUCT_OUT)/$(file))
+EMULATOR_FILE_DEPENDENCIES := $(foreach file, $(EMULATOR_FILENAMES), $(PRODUCT_OUT)/$(file))
 
 ADDITIONAL_BUILD_PROPERTIES += "ro.build.nanoscope=$(ROM_VERSION)"
 
@@ -649,7 +650,7 @@ $(EMULATOR_DUMMY_VENDOR_FILE):
 
 $(EMULATOR_ARCHIVE): $(EMULATOR_FILE_DEPENDENCIES)
 	rm -f $(EMULATOR_ARCHIVE)
-	(cd $(ANDROID_PRODUCT_OUT) && zip $(EMULATOR_ARCHIVE) $(EMULATOR_FILENAMES))
+	(cd $(PRODUCT_OUT) && zip $(EMULATOR_ARCHIVE_FILENAME) $(EMULATOR_FILENAMES))
 
 .PHONY: make-release
 make-release: $(ROM_ARCHIVE)
