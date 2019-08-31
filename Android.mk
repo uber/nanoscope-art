@@ -609,23 +609,17 @@ ROM_FILENAMES := \
   recovery.img \
   vendor.img \
   cache.img \
-  ramdisk-recovery.img \
   system.img
 ROM_FILE_DEPENDENCIES := $(foreach file, $(ROM_FILENAMES), $(PRODUCT_OUT)/$(file))
 
 EMULATOR_ARCHIVE_FILENAME := nanoscope-emulator-$(ROM_VERSION).zip
 EMULATOR_ARCHIVE := $(PRODUCT_OUT)/$(EMULATOR_ARCHIVE_FILENAME)
 LAUNCH_EMULATOR_FILE := $(PRODUCT_OUT)/emulator.sh
-EMULATOR_CONFIG_FILE := $(PRODUCT_OUT)/config.ini
 EMULATOR_DUMMY_VENDOR_FILE := $(PRODUCT_OUT)/vendor.img
 EMULATOR_FILENAMES := \
-  cache.img \
-  config.ini \
   emulator.sh \
   ramdisk.img \
-  vendor.img \
-  system.img \
-  system/build.prop
+  system.img
 EMULATOR_FILE_DEPENDENCIES := $(foreach file, $(EMULATOR_FILENAMES), $(PRODUCT_OUT)/$(file))
 
 ADDITIONAL_BUILD_PROPERTIES += "ro.build.nanoscope=$(ROM_VERSION)"
@@ -641,9 +635,6 @@ $(ROM_ARCHIVE): $(ROM_FILE_DEPENDENCIES)
 $(LAUNCH_EMULATOR_FILE): $(art_path)/__emulator.sh
 	cp $(art_path)/__emulator.sh $(LAUNCH_EMULATOR_FILE)
 	chmod +x $(LAUNCH_EMULATOR_FILE)
-
-$(EMULATOR_CONFIG_FILE): $(art_path)/__emulator_config.ini
-	cp $(art_path)/__emulator_config.ini $(EMULATOR_CONFIG_FILE)
 
 $(EMULATOR_DUMMY_VENDOR_FILE):
 	touch $(EMULATOR_DUMMY_VENDOR_FILE)

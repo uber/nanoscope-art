@@ -1,22 +1,27 @@
 #!/usr/bin/env bash
 
 WORK_DIR=$(dirname "$0")
-export DYLD_LIBRARY_PATH="$ANDROID_HOME/emulator/lib64/qt/lib:$ANDROID_HOME/emulator/lib64:$DYLD_LIBRARY_PATH"
 
-KERNEL_FILE=$ANDROID_HOME/system-images/android-25/google_apis/x86/kernel-qemu
+AVDMANAGER="$ANDROID_HOME/tools/bin/avdmanager"
+SDKMANAGER="$ANDROID_HOME/tools/bin/sdkmanager"
+EMULATOR="$ANDROID_HOME/tools/emulator"
 
-if [ ! -f "$KERNEL_FILE" ]; then
-	$ANDROID_HOME/tools/bin/sdkmanager "system-images;android-25;google_apis;x86"
+NANOSCOPE_IMG_DIR=$ANDROID_HOME/system-images/nanoscope
+BASE_IMG_DIR=$ANDROID_HOME/system-images/android-25/default/x86
+
+if [ ! -d "$NANOSCOPE_IMG_DIR" ]; then
+	rm -rf $NANOSCOPE_IMG_DIR
+
+	$SDKMANAGER emulator
+	$SDKMANAGER "system-images;android-25;default;x86"
+
+	cp -r $BASE_IMG_DIR $NANOSCOPE_IMG_DIR
+	cp "$WORK_DIR"/system.img $NANOSCOPE_IMG_DIR
+	cp "$WORK_DIR"/ramdisk.img $NANOSCOPE_IMG_DIR
+	sed -i '' 's/GLESDynamicVersion.*/GLESDynamicVersion\ =\ off/g' $NANOSCOPE_IMG_DIR/advancedFeatures.ini
+
+	$AVDMANAGER create avd -f -n nanoscope -k "system-images;android-25;default;x86" --device "pixel_xl"
+	sed -i '' 's/image\.sysdir\.1.*/image.sysdir.1=system-images\/nanoscope/g' ~/.android/avd/nanoscope.avd/config.ini
 fi
 
-$ANDROID_HOME/emulator/emulator64-x86 -verbose \
--sysdir $WORK_DIR \
--system $WORK_DIR/system.img \
--ramdisk $WORK_DIR/ramdisk.img \
--data $WORK_DIR/userdata.img \
--kernel $KERNEL_FILE \
--memory 1024 \
--partition-size 2056 \
--gpu host \
--skindir $ANDROID_HOME/skins \
--skin pixel
+$EMULATOR -verbose -avd nanoscope
